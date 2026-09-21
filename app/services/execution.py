@@ -42,6 +42,11 @@ def apply_execution(session:Session, order:InvestmentOrder, execution_id:str, qu
         if position.quantity==0: position.average_cost=Decimal("0")
         session.add(LedgerEntry(account_id=order.account_id,journal_id=journal.id,ledger_account="CASH",entry_type="EXECUTION",direction="DEBIT",amount=money(notional-fees),currency=position.currency,units=0,description="Cash proceeds net of fees"))
         session.add(LedgerEntry(account_id=order.account_id,journal_id=journal.id,ledger_account="INVESTMENT_ASSET",entry_type="EXECUTION",direction="CREDIT",amount=cost,currency=position.currency,units=quantity,description="Asset disposed"))
+        pnl=money(notional-cost-fees)
+        if pnl >= 0:
+            session.add(LedgerEntry(account_id=order.account_id,journal_id=journal.id,ledger_account="REALIZED_PNL",entry_type="EXECUTION",direction="CREDIT",amount=pnl,currency=position.currency,units=0,description="Realized gain after fees"))
+        else:
+            session.add(LedgerEntry(account_id=order.account_id,journal_id=journal.id,ledger_account="REALIZED_PNL",entry_type="EXECUTION",direction="DEBIT",amount=-pnl,currency=position.currency,units=0,description="Realized loss after fees"))
         if fees:
             session.add(LedgerEntry(account_id=order.account_id,journal_id=journal.id,ledger_account="FEES",entry_type="EXECUTION",direction="DEBIT",amount=fees,currency=position.currency,units=0,description="Execution fees"))
             session.add(LedgerEntry(account_id=order.account_id,journal_id=journal.id,ledger_account="CASH",entry_type="EXECUTION",direction="CREDIT",amount=fees,currency=position.currency,units=0,description="Execution fees"))
@@ -49,6 +54,7 @@ def apply_execution(session:Session, order:InvestmentOrder, execution_id:str, qu
     session.add(fill)
     new_total=executed+quantity
     order.status="FILLED" if new_total==order.quantity else "PARTIALLY_FILLED"
+    assert_journal_balanced(session,journal.id)
     return fill
 
 def assert_journal_balanced(session:Session,journal_id):
