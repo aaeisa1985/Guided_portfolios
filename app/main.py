@@ -174,7 +174,7 @@ class AuditLog(Base):
     ip_address:Mapped[Optional[str]]=mapped_column(String(64),nullable=True)
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
 
-engine=create_engine(DATABASE_URL,connect_args={"check_same_thread":False})
+engine=create_engine(DATABASE_URL,connect_args={"check_same_thread":False} if DATABASE_URL.startswith("sqlite") else {},pool_pre_ping=True)
 
 
 class RegisterIn(BaseModel):
