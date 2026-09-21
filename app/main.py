@@ -334,8 +334,13 @@ def simulator(x:SimulatorIn):
         return {"initialInvestment":x.amount,"periodYears":x.years,"expectedAnnualReturn":net,"managementFee":float(p.management_fee),"scenarios":{"conservative":float(x.amount)*(1+max(-.05,net-.04))**x.years,"base":float(x.amount)*(1+net)**x.years,"optimistic":float(x.amount)*(1+net+.04)**x.years},"disclaimer":"Illustrative projection only; not a guarantee or investment recommendation."}
 
 @app.post("/api/v1/subscriptions")
-def subscribe(x:SubscriptionIn,c=Depends(current_user)):
+def subscribe(x:SubscriptionIn,c=Depends(current_user),x_idempotency_key:Optional[str]=Header(None,alias="X-Idempotency-Key")):
     with Session(engine) as s:
+        if x_idempotency_key:
+            prior=s.scalar(select(IdempotencyKey).where(IdempotencyKey.customer_id==c.id,IdempotencyKey.key==x_idempotency_key,IdempotencyKey.endpoint=="POST:/api/v1/subscriptions"))
+            if prior:
+                import json
+                return json.loads(prior.response_body)
         p=s.get(Portfolio,x.portfolio_id)
         if not p: raise HTTPException(404,"Portfolio not found")
         if x.amount<p.minimum_investment: raise HTTPException(400,f"Minimum investment is {p.minimum_investment} {p.base_currency}")
@@ -344,7 +349,10 @@ def subscribe(x:SubscriptionIn,c=Depends(current_user)):
         suit=s.scalar(select(SuitabilityAssessment).where(SuitabilityAssessment.customer_id==c.id,SuitabilityAssessment.portfolio_id==p.id).order_by(SuitabilityAssessment.created_at.desc()))
         if not suit or not suit.is_suitable: raise HTTPException(400,"Suitability check must pass before subscription")
         sub=PortfolioSubscription(account_id=account.id,portfolio_id=p.id,subscription_amount=x.amount,status="PAYMENT_PENDING")
-        s.add(sub); s.flush(); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="CREATED")); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="SUITABILITY_CHECKED")); audit(s,c,"SUBSCRIPTION_CREATED","PortfolioSubscription",sub.id); s.commit()
+        s.add(sub); s.flush()
+        version=s.scalar(select(PortfolioVersion).where(PortfolioVersion.portfolio_id==p.id,PortfolioVersion.status=="ACTIVE").order_by(PortfolioVersion.version_number.desc()))
+        if version: sub.portfolio_version_id=version.id
+        s.add(SubscriptionEvent(subscription_id=sub.id,event_type="CREATED")); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="SUITABILITY_CHECKED")); audit(s,c,"SUBSCRIPTION_CREATED","PortfolioSubscription",sub.id); s.commit()
         return {"subscriptionId":sub.id,"status":sub.status,"portfolioId":sub.portfolio_id,"amount":sub.subscription_amount,"currency":p.base_currency,"createdAt":sub.created_at}
 
 @app.get("/api/v1/subscriptions")
