@@ -15,7 +15,9 @@ from passlib.context import CryptContext
 from jose import jwt, JWTError
 
 DATABASE_URL=os.getenv("DATABASE_URL","sqlite:///./data/emcoin.db")
-SECRET=os.getenv("EMCOIN_JWT_SECRET","dev-only-change-this-secret")
+SECRET=os.getenv("EMCOIN_JWT_SECRET")
+if not SECRET or SECRET=="dev-only-change-this-secret":
+    raise RuntimeError("EMCOIN_JWT_SECRET must be set to a strong secret before starting the API")
 ALGORITHM="HS256"
 CORS_ORIGINS=[x.strip() for x in os.getenv("CORS_ORIGINS","http://localhost:8000,http://127.0.0.1:8000").split(",") if x.strip()]
 if DATABASE_URL.startswith("sqlite:///./data/"):
@@ -269,6 +271,12 @@ def audit(s,actor,action,entity,entity_id=None):
 @app.get("/health")
 def health(): return {"status":"ok","service":"emcoin-guided-portfolios","version":"1.0.0"}
 
+@app.get("/health/ready")
+def readiness():
+    with Session(engine) as s:
+        s.execute(select(1))
+    return {"status":"ready","database":"ok"}
+
 @app.post("/api/v1/auth/register",response_model=TokenOut)
 def register(x:RegisterIn):
     with Session(engine) as s:
@@ -353,7 +361,7 @@ def subscribe(x:SubscriptionIn,c=Depends(current_user),x_idempotency_key:Optiona
         version=s.scalar(select(PortfolioVersion).where(PortfolioVersion.portfolio_id==p.id,PortfolioVersion.status=="ACTIVE").order_by(PortfolioVersion.version_number.desc()))
         if version: sub.portfolio_version_id=version.id
         s.add(SubscriptionEvent(subscription_id=sub.id,event_type="CREATED")); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="SUITABILITY_CHECKED")); audit(s,c,"SUBSCRIPTION_CREATED","PortfolioSubscription",sub.id); s.commit()
-        return {"subscriptionId":sub.id,"status":sub.status,"portfolioId":sub.portfolio_id,"amount":sub.subscription_amount,"currency":p.base_currency,"createdAt":sub.created_at}
+        return {"subscriptionId":sub.id,"status":sub.status,"portfolioId":sub.portfolio_id,"portfolioVersionId":sub.portfolio_version_id,"amount":sub.subscription_amount,"currency":p.base_currency,"createdAt":sub.created_at}
 
 @app.get("/api/v1/subscriptions")
 def subscriptions(c=Depends(current_user)):
