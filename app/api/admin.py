@@ -6,12 +6,101 @@ from fastapi import Depends,Header,HTTPException,Query,Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import engine
-from app.core.security import current_user
+from app.core.security import current_user,current_admin,admin_token_for
 from app.models import *
-from app.schemas import InstrumentIn,LedgerEntryIn,OrderIn,ExecutionIn
+from app.schemas import InstrumentIn,LedgerEntryIn,OrderIn,ExecutionIn,AdminLoginIn,PortfolioCreateIn,PortfolioUpdateIn,AdminUserUpdateIn,AdminPortfolioResponse
 from app.services.audit import audit
 from fastapi import APIRouter
 router=APIRouter()
+
+from secrets import compare_digest
+from app.core.config import ADMIN_USERNAME,ADMIN_PASSWORD
+
+def _admin_audit(session,admin,action,entity,entity_id=None,request=None):
+    session.add(AuditLog(
+        actor_id=None,
+        actor_type="ADMIN",
+        action=action,
+        entity_type=entity,
+        entity_id=str(entity_id) if entity_id else None,
+        ip_address=request.client.host if request and request.client else None,
+        user_agent=request.headers.get("user-agent") if request else None,
+    ))
+
+@router.post("/api/v1/admin/auth/login")
+def admin_login(x:AdminLoginIn):
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+        raise HTTPException(503,"Admin credentials are not configured")
+    if not compare_digest(x.username,ADMIN_USERNAME) or not compare_digest(x.password,ADMIN_PASSWORD):
+        raise HTTPException(401,"Invalid admin credentials")
+    return {"access_token":admin_token_for(x.username),"token_type":"bearer"}
+
+@router.get("/api/v1/admin/auth/me")
+def admin_me(admin=Depends(current_admin)):
+    return admin
+
+@router.get("/api/v1/admin/overview")
+def admin_overview(admin=Depends(current_admin)):
+    with Session(engine) as s:
+        users=s.scalar(select(func.count()).select_from(Customer)) or 0
+        active_portfolios=s.scalar(select(func.count()).select_from(Portfolio).where(Portfolio.status=="ACTIVE")) or 0
+        total_portfolios=s.scalar(select(func.count()).select_from(Portfolio)) or 0
+        subscriptions=s.scalar(select(func.count()).select_from(PortfolioSubscription)) or 0
+        pending=s.scalar(select(func.count()).select_from(PortfolioSubscription).where(PortfolioSubscription.status.not_in(["ALLOCATED","COMPLETED"]))) or 0
+        return {"users":users,"activePortfolios":active_portfolios,"totalPortfolios":total_portfolios,"subscriptions":subscriptions,"pendingSubscriptions":pending}
+
+@router.get("/api/v1/admin/users")
+def admin_users(search:str|None=Query(None),admin=Depends(current_admin)):
+    with Session(engine) as s:
+        q=select(Customer).order_by(Customer.created_at.desc())
+        if search:
+            term="%"+search.strip()+"%"
+            q=q.where(Customer.full_name.ilike(term) | Customer.email.ilike(term) | Customer.customer_id.ilike(term))
+        rows=s.scalars(q.limit(500)).all()
+        return [{"id":u.id,"customerId":u.customer_id,"fullName":u.full_name,"email":u.email,"mobile":u.mobile,"investorType":u.investor_type,"kycStatus":u.kyc_status,"amlStatus":u.aml_status,"role":u.role,"createdAt":u.created_at} for u in rows]
+
+@router.patch("/api/v1/admin/users/{user_id}")
+def admin_update_user(request:Request,user_id:UUID,x:AdminUserUpdateIn,admin=Depends(current_admin)):
+    with Session(engine) as s:
+        u=s.get(Customer,user_id)
+        if not u: raise HTTPException(404,"User not found")
+        changes=x.model_dump(exclude_unset=True)
+        for k,v in changes.items(): setattr(u,k,v)
+        _admin_audit(s,admin,"ADMIN_USER_UPDATED","Customer",u.id,request)
+        s.commit()
+        return {"id":u.id,"customerId":u.customer_id,"fullName":u.full_name,"email":u.email,"mobile":u.mobile,"investorType":u.investor_type,"kycStatus":u.kyc_status,"amlStatus":u.aml_status,"role":u.role}
+
+@router.get("/api/v1/admin/portfolios",response_model=list[AdminPortfolioResponse])
+def admin_portfolios(admin=Depends(current_admin)):
+    with Session(engine) as s:
+        rows=s.scalars(select(Portfolio).order_by(Portfolio.name)).all()
+        return rows
+
+@router.post("/api/v1/admin/portfolios",response_model=AdminPortfolioResponse)
+def admin_create_portfolio(request:Request,x:PortfolioCreateIn,admin=Depends(current_admin)):
+    with Session(engine) as s:
+        if s.scalar(select(Portfolio).where(Portfolio.slug==x.slug)):
+            raise HTTPException(409,"Portfolio slug already exists")
+        p=Portfolio(name=x.name,slug=x.slug,category=x.category,objective=x.objective,risk_level=x.risk_level,minimum_investment=x.minimum_investment,management_fee=x.management_fee,performance_fee=x.performance_fee,benchmark=x.benchmark,base_currency=x.base_currency.upper(),liquidity_terms=x.liquidity_terms,status=x.status)
+        s.add(p); s.flush()
+        if x.primary_allocation>0:
+            s.add(PortfolioAllocation(portfolio_id=p.id,asset_class="Primary Allocation",target_weight=x.primary_allocation))
+        s.add(PortfolioPerformance(portfolio_id=p.id,nav=Decimal("100"),daily_return=Decimal("0"),monthly_return=Decimal("0"),ytd_return=Decimal("0")))
+        _admin_audit(s,admin,"ADMIN_PORTFOLIO_CREATED","Portfolio",p.id,request)
+        s.commit()
+        return p
+
+@router.patch("/api/v1/admin/portfolios/{portfolio_id}",response_model=AdminPortfolioResponse)
+def admin_update_portfolio(request:Request,portfolio_id:UUID,x:PortfolioUpdateIn,admin=Depends(current_admin)):
+    with Session(engine) as s:
+        p=s.get(Portfolio,portfolio_id)
+        if not p: raise HTTPException(404,"Portfolio not found")
+        changes=x.model_dump(exclude_unset=True)
+        if "base_currency" in changes and changes["base_currency"]: changes["base_currency"]=changes["base_currency"].upper()
+        for k,v in changes.items(): setattr(p,k,v)
+        _admin_audit(s,admin,"ADMIN_PORTFOLIO_UPDATED","Portfolio",p.id,request)
+        s.commit()
+        return p
 
 @router.post("/api/v1/admin/seed")
 def seed(request: Request,c=Depends(current_user)):
