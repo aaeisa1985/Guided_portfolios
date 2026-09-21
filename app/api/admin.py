@@ -18,10 +18,10 @@ def seed(request: Request,c=Depends(current_user)):
     with Session(engine) as s:
         if s.scalar(select(Portfolio)): return {"status":"already_seeded"}
         data=[
-          ("EmCoin Fixed Income","fixed-income","INCOME","Capital preservation and diversified income generation.",2,0.25),
-          ("EmCoin Balanced Growth","balanced-growth","BALANCED","Diversified long-term growth across defensive and growth assets.",3,0.75),
-          ("EmCoin Growth","growth","GROWTH","Long-term capital appreciation with higher volatility.",4,1.00),
-          ("EmCoin Digital Assets","digital-assets","ALTERNATIVES","Diversified digital-asset exposure with high volatility.",5,1.50)]
+          ("X Company Fixed Income","fixed-income","INCOME","Capital preservation and diversified income generation.",2,0.25),
+          ("X Company Balanced Growth","balanced-growth","BALANCED","Diversified long-term growth across defensive and growth assets.",3,0.75),
+          ("X Company Growth","growth","GROWTH","Long-term capital appreciation with higher volatility.",4,1.00),
+          ("X Company Digital Assets","digital-assets","ALTERNATIVES","Diversified digital-asset exposure with high volatility.",5,1.50)]
         for name,slug,cat,obj,risk,fee in data:
             p=Portfolio(name=name,slug=slug,category=cat,objective=obj,risk_level=risk,minimum_investment=Decimal("1000"),management_fee=Decimal(str(fee)),benchmark="Internal blended benchmark",liquidity_terms="Daily")
             s.add(p); s.flush()
