@@ -342,3 +342,12 @@ def seed(c=Depends(current_user)):
 def audit_logs(c=Depends(current_user),limit:int=Query(100,le=500)):
     if c.role not in (Role.admin.value,Role.manager.value): raise HTTPException(403,"Admin or manager required")
     with Session(engine) as s:return list(s.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)).all())
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
+
+@app.get("/", include_in_schema=False)
+def frontend_home():
+    return FileResponse("frontend/index.html")
