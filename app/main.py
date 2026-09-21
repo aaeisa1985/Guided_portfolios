@@ -142,6 +142,32 @@ class PortfolioHolding(Base):
     instrument_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("instruments.id"),index=True,nullable=True)
     target_weight:Mapped[Decimal]=mapped_column(Numeric(8,4))
 
+class PortfolioPosition(Base):
+    __tablename__="portfolio_positions"
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    account_id:Mapped[UUID]=mapped_column(ForeignKey("investment_accounts.id"),index=True)
+    portfolio_id:Mapped[UUID]=mapped_column(ForeignKey("portfolios.id"),index=True)
+    instrument_id:Mapped[UUID]=mapped_column(ForeignKey("instruments.id"),index=True)
+    quantity:Mapped[Decimal]=mapped_column(Numeric(24,8),default=0)
+    average_cost:Mapped[Decimal]=mapped_column(Numeric(24,8),default=0)
+    market_price:Mapped[Decimal]=mapped_column(Numeric(24,8),default=0)
+    currency:Mapped[str]=mapped_column(String(3),default="AED")
+    updated_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class InvestmentOrder(Base):
+    __tablename__="investment_orders"
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    account_id:Mapped[UUID]=mapped_column(ForeignKey("investment_accounts.id"),index=True)
+    portfolio_id:Mapped[UUID]=mapped_column(ForeignKey("portfolios.id"),index=True)
+    instrument_id:Mapped[UUID]=mapped_column(ForeignKey("instruments.id"),index=True)
+    side:Mapped[str]=mapped_column(String(10))
+    order_type:Mapped[str]=mapped_column(String(20),default="MARKET")
+    quantity:Mapped[Decimal]=mapped_column(Numeric(24,8),default=0)
+    limit_price:Mapped[Optional[Decimal]]=mapped_column(Numeric(24,8),nullable=True)
+    status:Mapped[str]=mapped_column(String(30),default="PENDING")
+    idempotency_key:Mapped[Optional[str]]=mapped_column(String(200),nullable=True,index=True)
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
 class PortfolioPerformance(Base):
     __tablename__="portfolio_performance"
     id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
@@ -240,7 +266,7 @@ class SimulatorIn(BaseModel): portfolio_id:UUID; amount:Decimal=Field(gt=0); yea
 class SubscriptionIn(BaseModel): portfolio_id:UUID; amount:Decimal=Field(gt=0)
 class ConsentIn(BaseModel): portfolio_id:UUID; consent_type:str; consent_text:str; accepted:bool
 class InstrumentIn(BaseModel): symbol:Optional[str]=None; name:str; instrument_type:str; asset_class:str; currency:str="AED"; isin:Optional[str]=None
-class LedgerEntryIn(BaseModel): account_id:UUID; entry_type:str; direction:str; amount:Decimal=Field(gt=0); currency:str="AED"; units:Decimal=Field(default=0,ge=0); description:str=""
+class LedgerEntryIn(BaseModel): account_id:UUID; entry_type:str; direction:str; amount:Decimal=Field(gt=0); currency:str="AED"; units:Decimal=Field(default=0,ge=0); description:str=""\nclass OrderIn(BaseModel): account_id:UUID; portfolio_id:UUID; instrument_id:UUID; side:str; quantity:Decimal=Field(gt=0); order_type:str="MARKET"; limit_price:Optional[Decimal]=Field(default=None,gt=0)
 class TokenOut(BaseModel): access_token:str; token_type:str="bearer"
 
 app=FastAPI(title="EmCoin Guided Portfolios API",version="1.0.0",description="Institutional-grade Guided Portfolios MVP")
@@ -465,6 +491,33 @@ def approve_portfolio_version(portfolio_id:UUID,version_id:UUID,c=Depends(curren
         v.status="ACTIVE"; v.effective_at=datetime.now(timezone.utc); v.approved_by=c.id
         audit(s,c,"PORTFOLIO_VERSION_APPROVED","PortfolioVersion",v.id); s.commit()
         return {"id":v.id,"versionNumber":v.version_number,"status":v.status,"effectiveAt":v.effective_at}
+
+@app.post("/api/v1/admin/orders")
+def create_order(x:OrderIn,c=Depends(current_user),x_idempotency_key:Optional[str]=Header(None,alias="X-Idempotency-Key")):
+    require_staff(c)
+    side=x.side.upper()
+    if side not in ("BUY","SELL"): raise HTTPException(400,"Order side must be BUY or SELL")
+    with Session(engine) as s:
+        account=s.get(InvestmentAccount,x.account_id)
+        if not account: raise HTTPException(404,"Investment account not found")
+        if not s.get(Portfolio,x.portfolio_id): raise HTTPException(404,"Portfolio not found")
+        if not s.get(Instrument,x.instrument_id): raise HTTPException(404,"Instrument not found")
+        if x_idempotency_key:
+            prior=s.scalar(select(InvestmentOrder).where(InvestmentOrder.idempotency_key==x_idempotency_key))
+            if prior: return {"id":prior.id,"status":prior.status,"replayed":True}
+        o=InvestmentOrder(account_id=x.account_id,portfolio_id=x.portfolio_id,instrument_id=x.instrument_id,side=side,order_type=x.order_type.upper(),quantity=x.quantity,limit_price=x.limit_price,idempotency_key=x_idempotency_key,status="PENDING")
+        s.add(o); s.flush(); audit(s,c,"ORDER_CREATED","InvestmentOrder",o.id); s.commit()
+        return {"id":o.id,"status":o.status,"side":o.side,"quantity":o.quantity,"createdAt":o.created_at}
+
+@app.post("/api/v1/admin/orders/{order_id}/cancel")
+def cancel_order(order_id:UUID,c=Depends(current_user)):
+    require_staff(c)
+    with Session(engine) as s:
+        o=s.get(InvestmentOrder,order_id)
+        if not o: raise HTTPException(404,"Order not found")
+        if o.status not in ("PENDING","PROCESSING"): raise HTTPException(400,"Only pending or processing orders can be cancelled")
+        o.status="CANCELLED"; audit(s,c,"ORDER_CANCELLED","InvestmentOrder",o.id); s.commit()
+        return {"id":o.id,"status":o.status}
 
 @app.post("/api/v1/admin/ledger")
 def create_ledger_entry(x:LedgerEntryIn,c=Depends(current_user)):
