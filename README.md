@@ -1,69 +1,11 @@
-# X Company Guided Portfolios
+# Guided Portfolios
 
-A production-oriented Guided Portfolios MVP combining an institutional-style web experience with a FastAPI domain backend.
+Institutional-grade Guided Portfolios platform foundation with portfolio operations, accounting, suitability, subscriptions and a production-grade Corporate Actions Engine.
 
-## Product flow
+Corporate Actions supports SPLIT, REVERSE_SPLIT, CASH_DIVIDEND, STOCK_DIVIDEND, RIGHTS_ISSUE and MERGER.
 
-Customer → Authentication → Investor/Risk Profile → Portfolio Shelf → Suitability → Disclosure Consent → Subscription → Lifecycle Events → Dashboard / Activity
+Lifecycle: DRAFT -> APPROVED -> PROCESSING -> COMPLETED/FAILED.
 
-## Included
+Maker/checker approval is enforced, positions are locked during execution, per-position snapshots are stored, and ledger journals are generated for financial or memo impacts.
 
-- FastAPI + SQLAlchemy backend
-- Customer registration/login with JWT
-- Investment account creation
-- Risk assessment and suitability engine
-- Portfolio catalog, allocations, holdings, NAV performance and documents
-- Projection simulator with explicit non-guarantee disclaimer
-- Subscription lifecycle and subscription detail
-- Recorded disclosure consent with SHA-256 disclosure hash
-- Instrument master and portfolio versioning foundation
-- Idempotent subscription and order foundations with `X-Idempotency-Key`
-- Customer positions, order lifecycle and ledger views
-- Position-based valuation / unrealized P&L when positions are recorded
-- Journalized execution accounting with balanced double-entry validation
-- Position cost basis, realized/unrealized P&L, and price provenance
-- Valuation snapshots
-- Manager/admin controls for instruments, portfolio versions and ledger
-- Customer activity/audit timeline
-- Dashboard metrics
-- Responsive institutional frontend
-- NAV chart with dates and gridlines
-- Animated modals and typed toast notifications
-- Docker runtime with PostgreSQL 17 and persistent database volume
-- OpenAPI / Swagger
-
-## Local run
-
-Copy `.env.example` to `.env`, set a strong `XCOMPANY_JWT_SECRET`, then:
-
-```bash
-python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-Open `http://localhost:8000`.
-
-For Docker, the API uses the PostgreSQL `db` service automatically; the database volume is persistent. Health endpoints are `/health` and `/health/ready`.
-
-## Docker
-
-```bash
-cp .env.example .env
-# Set XCOMPANY_JWT_SECRET in .env
-docker compose up --build
-```
-
-The frontend is served by FastAPI at `/`; API documentation is available at `/docs`.
-
-## Seed demo portfolios
-
-Register an account, promote that customer to ADMIN in the database, then POST `/api/v1/admin/seed`.
-
-## Architecture notes
-
-The MVP deliberately keeps the domain model explicit so it can evolve into managed accounts, robo-advisory, asset management and fund workflows.
-
-Current infrastructure uses PostgreSQL + Alembic migrations in Docker. The investment domain now includes instrument records, portfolio versions, idempotent subscriptions and a ledger foundation. Before production launch, harden ledger immutability and double-entry enforcement, add managed secrets, real KYC/AML, payment/custody integrations, maker-checker approvals, object storage for documents, notifications, observability, rate limiting and UAE-specific regulatory controls.
+Migration: 0007_corporate_actions.py.
