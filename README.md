@@ -56,4 +56,4 @@ Register an account, promote that customer to ADMIN in the database, then POST `
 
 The MVP deliberately keeps the domain model explicit so it can evolve into managed accounts, robo-advisory, asset management and fund workflows.
 
-Before production launch, add PostgreSQL/Alembic migrations, managed secrets, real KYC/AML, payment/custody integrations, immutable accounting/ledger controls, idempotency enforcement, maker-checker approvals, object storage for documents, notifications, observability, rate limiting and UAE-specific regulatory controls.
+Current infrastructure uses PostgreSQL + Alembic migrations in Docker. Before production launch, add managed secrets, real KYC/AML, payment/custody integrations, immutable accounting/ledger controls, idempotency enforcement, maker-checker approvals, object storage for documents, notifications, observability, rate limiting and UAE-specific regulatory controls.
