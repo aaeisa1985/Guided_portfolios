@@ -47,3 +47,30 @@ def test_execution_updates_position_and_balances_ledger():
         journal_id=s.query(LedgerEntry.journal_id).first()[0]
         assert assert_journal_balanced(s,journal_id)
         s.commit()
+
+
+def test_execution_partial_fill_idempotency_and_oversell():
+    from decimal import Decimal
+    from sqlalchemy.orm import Session
+    from app.models import InvestmentOrder,ExecutionFill,PortfolioPosition
+    from app.services.execution import apply_execution
+    with Session(engine) as s:
+        position=s.query(PortfolioPosition).first()
+        order=InvestmentOrder(account_id=position.account_id,portfolio_id=position.portfolio_id,instrument_id=position.instrument_id,side="BUY",order_type="MARKET",quantity=Decimal("10"))
+        s.add(order); s.flush()
+        first=apply_execution(s,order,"EXEC-PART-1",Decimal("4"),Decimal("100"))
+        assert order.status=="PARTIALLY_FILLED"
+        second=apply_execution(s,order,"EXEC-PART-2",Decimal("6"),Decimal("110"))
+        assert order.status=="FILLED"
+        assert s.query(ExecutionFill).filter_by(order_id=order.id).count()==2
+        replay=apply_execution(s,order,"EXEC-PART-2",Decimal("6"),Decimal("999"))
+        assert replay.id==second.id
+        assert position.quantity==Decimal("20")
+        sell=InvestmentOrder(account_id=position.account_id,portfolio_id=position.portfolio_id,instrument_id=position.instrument_id,side="SELL",order_type="MARKET",quantity=Decimal("999"))
+        s.add(sell); s.flush()
+        try:
+            apply_execution(s,sell,"EXEC-OVERSELL-2",Decimal("999"),Decimal("100"))
+            assert False, "oversell must be rejected"
+        except ValueError as exc:
+            assert "available position" in str(exc)
+        s.rollback()

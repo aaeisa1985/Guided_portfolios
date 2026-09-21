@@ -57,6 +57,7 @@ class LedgerEntry(Base):
 
 class PortfolioPosition(Base):
     __tablename__="portfolio_positions"
+    __table_args__=(UniqueConstraint("account_id","portfolio_id","instrument_id",name="uq_portfolio_position_key"),)
     id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
     account_id:Mapped[UUID]=mapped_column(ForeignKey("investment_accounts.id"),index=True)
     portfolio_id:Mapped[UUID]=mapped_column(ForeignKey("portfolios.id"),index=True)
@@ -64,6 +65,9 @@ class PortfolioPosition(Base):
     quantity:Mapped[Decimal]=mapped_column(Numeric(24,8),default=0)
     average_cost:Mapped[Decimal]=mapped_column(Numeric(24,8),default=0)
     market_price:Mapped[Decimal]=mapped_column(Numeric(24,8),default=0)
+    realized_pnl:Mapped[Decimal]=mapped_column(Numeric(18,2),default=0)
+    price_as_of:Mapped[Optional[datetime]]=mapped_column(DateTime(timezone=True),nullable=True)
+    price_source:Mapped[str]=mapped_column(String(120),default="INTERNAL")
     currency:Mapped[str]=mapped_column(String(3),default="AED")
     updated_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
 

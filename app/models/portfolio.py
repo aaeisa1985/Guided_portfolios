@@ -18,6 +18,7 @@ class Portfolio(Base):
     minimum_investment:Mapped[Decimal]=mapped_column(Numeric(18,2),default=0)
     management_fee:Mapped[Decimal]=mapped_column(Numeric(8,4),default=0)
     performance_fee:Mapped[Decimal]=mapped_column(Numeric(8,4),default=0)
+    cost_basis_method:Mapped[str]=mapped_column(String(30),default="AVERAGE_COST")
     benchmark:Mapped[Optional[str]]=mapped_column(String(100),nullable=True)
     base_currency:Mapped[str]=mapped_column(String(3),default="AED")
     liquidity_terms:Mapped[str]=mapped_column(String(100),default="Daily")

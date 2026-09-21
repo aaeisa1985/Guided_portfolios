@@ -45,3 +45,7 @@ Add maker-checker approval, stronger permission matrices, immutable/reversal-onl
 
 ### 8. External adapters
 Only after the internal engine passes reconciliation and failure-mode testing should broker, custodian and payment-provider adapters be connected.
+
+
+### Selected controls added
+The engine now uses explicit average-cost metadata, locks the order/position rows during execution, blocks unpriced open positions from valuation, and exposes account reconciliation checks. These are control improvements without pretending the system has full tax-lot, multi-currency or corporate-action capabilities yet.

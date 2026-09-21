@@ -20,7 +20,9 @@ Customer → Authentication → Investor/Risk Profile → Portfolio Shelf → Su
 - Idempotent subscription and order foundations with `X-Idempotency-Key`
 - Customer positions, order lifecycle and ledger views
 - Position-based valuation / unrealized P&L when positions are recorded
-- Append-only ledger entry foundation with staff controls
+- Journalized execution accounting with balanced double-entry validation
+- Position cost basis, realized/unrealized P&L, and price provenance
+- Valuation snapshots
 - Manager/admin controls for instruments, portfolio versions and ledger
 - Customer activity/audit timeline
 - Dashboard metrics

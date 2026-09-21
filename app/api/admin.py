@@ -24,7 +24,7 @@ def seed(request: Request,c=Depends(current_user)):
           ("X Company Growth","growth","GROWTH","Long-term capital appreciation with higher volatility.",4,1.00),
           ("X Company Digital Assets","digital-assets","ALTERNATIVES","Diversified digital-asset exposure with high volatility.",5,1.50)]
         for name,slug,cat,obj,risk,fee in data:
-            p=Portfolio(name=name,slug=slug,category=cat,objective=obj,risk_level=risk,minimum_investment=Decimal("1000"),management_fee=Decimal(str(fee)),benchmark="Internal blended benchmark",liquidity_terms="Daily")
+            p=Portfolio(name=name,slug=slug,category=cat,objective=obj,risk_level=risk,minimum_investment=Decimal("1000"),management_fee=Decimal(str(fee)),cost_basis_method="AVERAGE_COST",benchmark="Internal blended benchmark",liquidity_terms="Daily")
             s.add(p); s.flush()
             s.add(PortfolioAllocation(portfolio_id=p.id,asset_class="Primary Allocation",target_weight=Decimal("100")))
             s.add(PortfolioPerformance(portfolio_id=p.id,nav=Decimal("100"),daily_return=Decimal("0"),monthly_return=Decimal("0"),ytd_return=Decimal("0")))
@@ -99,11 +99,15 @@ def execute_order(request: Request,order_id:UUID,x:ExecutionIn,c=Depends(current
         o=s.get(InvestmentOrder,order_id)
         if not o: raise HTTPException(404,"Order not found")
         if o.status in ("CANCELLED","FILLED"): raise HTTPException(400,"Order cannot receive another execution")
+        existing=s.scalar(select(ExecutionFill).where(ExecutionFill.execution_id==x.execution_id))
+        if existing:
+            if existing.order_id!=o.id: raise HTTPException(409,"Execution ID is already assigned to another order")
+            return {"executionId":existing.execution_id,"orderId":o.id,"status":o.status,"quantity":existing.quantity,"price":existing.price,"fees":existing.fees,"replayed":True}
         try:
             fill=apply_execution(s,o,x.execution_id,x.quantity,x.price,x.fees)
             audit(s,c,"ORDER_EXECUTED","ExecutionFill",fill.id,request=request)
             s.commit()
-            return {"executionId":fill.execution_id,"orderId":o.id,"status":o.status,"quantity":fill.quantity,"price":fill.price,"fees":fill.fees}
+            return {"executionId":fill.execution_id,"orderId":o.id,"status":o.status,"quantity":fill.quantity,"price":fill.price,"fees":fill.fees,"replayed":False}
         except ValueError as e:
             s.rollback()
             raise HTTPException(400,str(e))
@@ -121,10 +125,7 @@ def cancel_order(request: Request,order_id:UUID,c=Depends(current_user)):
 @router.post("/api/v1/admin/ledger")
 def create_ledger_entry(request: Request,x:LedgerEntryIn,c=Depends(current_user)):
     require_staff(c)
-    with Session(engine) as s:
-        if not s.get(InvestmentAccount,x.account_id): raise HTTPException(404,"Investment account not found")
-        e=LedgerEntry(**x.model_dump()); s.add(e); s.flush(); audit(s,c,"LEDGER_ENTRY_CREATED","LedgerEntry",e.id,request=request); s.commit()
-        return {"id":e.id,"accountId":e.account_id,"entryType":e.entry_type,"direction":e.direction,"amount":e.amount,"currency":e.currency}
+    raise HTTPException(410,"Direct single-line ledger creation is disabled. Use a journalized accounting operation so every transaction remains balanced.")
 
 @router.post("/api/v1/admin/valuations/{account_id}")
 def create_valuation(request: Request,account_id:UUID,c=Depends(current_user)):
@@ -133,12 +134,22 @@ def create_valuation(request: Request,account_id:UUID,c=Depends(current_user)):
         account=s.get(InvestmentAccount,account_id)
         if not account: raise HTTPException(404,"Investment account not found")
         positions=s.scalars(select(PortfolioPosition).where(PortfolioPosition.account_id==account_id,PortfolioPosition.quantity>0)).all()
+        missing_prices=[p.id for p in positions if p.market_price<=0]
+        if missing_prices: raise HTTPException(409,"Valuation blocked: one or more open positions have no positive market price")
         market=sum((p.quantity*p.market_price for p in positions),Decimal("0"))
         rows=s.scalars(select(LedgerEntry).where(LedgerEntry.account_id==account_id,LedgerEntry.ledger_account=="CASH")).all()
         cash=sum((e.amount if e.direction=="DEBIT" else -e.amount for e in rows),Decimal("0"))
         snap=ValuationSnapshot(account_id=account_id,market_value=market,cash_value=cash,nav=market+cash,currency=account.base_currency,price_source="INTERNAL_POSITION_PRICES")
         s.add(snap); s.flush(); audit(s,c,"VALUATION_SNAPSHOT_CREATED","ValuationSnapshot",snap.id,request=request); s.commit()
         return {"id":snap.id,"accountId":account_id,"asOf":snap.as_of,"cashValue":snap.cash_value,"marketValue":snap.market_value,"nav":snap.nav,"currency":snap.currency,"priceSource":snap.price_source}
+
+@router.get("/api/v1/admin/reconciliation/{account_id}")
+def reconcile(account_id:UUID,c=Depends(current_user)):
+    require_staff(c)
+    from app.services.reconciliation import reconcile_account
+    with Session(engine) as s:
+        if not s.get(InvestmentAccount,account_id): raise HTTPException(404,"Investment account not found")
+        return reconcile_account(s,account_id)
 
 @router.get("/api/v1/admin/ledger/{account_id}")
 def account_ledger(account_id:UUID,c=Depends(current_user)):
