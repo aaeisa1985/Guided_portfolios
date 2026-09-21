@@ -17,11 +17,13 @@ def upgrade():
                 batch.add_column(sa.Column("user_agent",sa.String(length=512),nullable=True))
     if "idempotency_keys" in inspector.get_table_names():
         indexes={i["name"] for i in inspector.get_indexes("idempotency_keys")}
-        if "uq_idempotency_customer_key_endpoint" not in indexes:
+        constraints={i["name"] for i in inspector.get_unique_constraints("idempotency_keys")}
+        if "uq_idempotency_customer_key_endpoint" not in indexes and "uq_idempotency_customer_key_endpoint" not in constraints:
             op.create_index("uq_idempotency_customer_key_endpoint","idempotency_keys",["customer_id","key","endpoint"],unique=True)
     if "investment_orders" in inspector.get_table_names():
         indexes={i["name"] for i in inspector.get_indexes("investment_orders")}
-        if "uq_investment_order_idempotency_key" not in indexes:
+        constraints={i["name"] for i in inspector.get_unique_constraints("investment_orders")}
+        if "uq_investment_order_idempotency_key" not in indexes and "uq_investment_order_idempotency_key" not in constraints:
             op.create_index("uq_investment_order_idempotency_key","investment_orders",["idempotency_key"],unique=True)
 
 def downgrade():
