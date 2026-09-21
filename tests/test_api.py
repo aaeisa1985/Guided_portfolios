@@ -23,3 +23,26 @@ def test_register_and_me():
 
 def test_protected_route_requires_auth():
     assert client.get("/api/v1/positions").status_code==401
+
+
+def test_execution_updates_position_and_balances_ledger():
+    from decimal import Decimal
+    from app.models import Customer,InvestmentAccount,Portfolio,Instrument,InvestmentOrder,LedgerEntry
+    from app.services.execution import apply_execution,assert_journal_balanced
+    with __import__("sqlalchemy").orm.Session(engine) as s:
+        customer=Customer(customer_id="C-EXEC-1",full_name="Execution Test",email="exec@example.com",password_hash="x")
+        s.add(customer); s.flush()
+        account=InvestmentAccount(customer_id=customer.id,account_number="ACC-EXEC-1"); portfolio=Portfolio(name="Test",slug="test-exec",category="TEST",objective="Test",risk_level=2)
+        instrument=Instrument(symbol="TST",name="Test Instrument",instrument_type="ETF",asset_class="EQUITY")
+        s.add_all([account,portfolio,instrument]); s.flush()
+        order=InvestmentOrder(account_id=account.id,portfolio_id=portfolio.id,instrument_id=instrument.id,side="BUY",order_type="MARKET",quantity=Decimal("10"))
+        s.add(order); s.flush()
+        fill=apply_execution(s,order,"EXEC-1",Decimal("10"),Decimal("100"),Decimal("2"))
+        s.flush()
+        assert fill.quantity==Decimal("10")
+        pos=s.query(__import__("app.models",fromlist=["PortfolioPosition"]).PortfolioPosition).one()
+        assert pos.quantity==Decimal("10")
+        assert pos.average_cost==Decimal("100.20")
+        journal_id=s.query(LedgerEntry.journal_id).one()[0]
+        assert assert_journal_balanced(s,journal_id)
+        s.commit()
