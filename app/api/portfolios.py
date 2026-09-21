@@ -1,6 +1,6 @@
 from typing import Optional
 from uuid import UUID
-from fastapi import Query
+from fastapi import Query,HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import engine
