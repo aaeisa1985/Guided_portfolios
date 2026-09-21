@@ -4,4 +4,4 @@ from .suitability import SuitabilityIn
 from .simulator import SimulatorIn
 from .subscription import SubscriptionIn
 from .consent import ConsentIn
-from .investment import InstrumentIn,LedgerEntryIn,OrderIn
+from .investment import InstrumentIn,LedgerEntryIn,OrderIn,ExecutionIn
