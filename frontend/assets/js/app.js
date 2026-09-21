@@ -2,7 +2,7 @@
 'use strict';
 const API=location.origin+'/api/v1';
 const state={route:'landing',id:null};
-const session={token:localStorage.getItem('emcoin_token'),customer:null};
+const session={token:localStorage.getItem('xcompany_token'),customer:null};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const num=v=>Number(v||0);
@@ -16,7 +16,7 @@ const row=(k,v)=>'<div class="stmt-row"><span class="k">'+esc(k)+'</span><span c
 async function req(path,opt={}){
  const r=await fetch(API+path,{...opt,headers:{'Content-Type':'application/json',...(session.token?{Authorization:'Bearer '+session.token}:{}),...(opt.headers||{})}});
  let d={};try{d=await r.json()}catch(e){}
- if(!r.ok){if(r.status===401){localStorage.removeItem('emcoin_token');session.token=null;session.customer=null;nav('landing')}throw Error(d.detail||d.message||'Request failed')}
+ if(!r.ok){if(r.status===401){localStorage.removeItem('xcompany_token');session.token=null;session.customer=null;nav('landing')}throw Error(d.detail||d.message||'Request failed')}
  return d;
 }
 function toast(message,type='info'){
@@ -32,7 +32,7 @@ function nav(route,id){state.route=route;state.id=id||null;render();scrollTo({to
 function top(){
  const c=session.customer;
  const tabs=c?['dashboard','portfolios','subscriptions','activity','profile']:['portfolios'];
- return '<div class="topbar"><div class="topbar-inner"><button class="brand" onclick="nav(\'landing\')"><span class="mark">EmCoin</span> Guided Portfolios</button><div class="tabs">'+tabs.map(x=>'<button class="tab '+(state.route===x?'active':'')+'" onclick="nav(\''+x+'\')">'+x[0].toUpperCase()+x.slice(1)+'</button>').join('')+'</div><div class="top-actions">'+(c?'<span class="avatar">'+esc((c.name||'?').trim()[0])+'</span><button class="btn-ghost" onclick="logout()">Sign out</button>':'<button class="btn-ghost" onclick="auth(\'login\')">Sign in</button><button class="btn btn-primary btn-sm" onclick="auth(\'register\')">Open an account</button>')+'</div></div></div>';
+ return '<div class="topbar"><div class="topbar-inner"><button class="brand" onclick="nav(\'landing\')"><span class="mark">X Company</span> Guided Portfolios</button><div class="tabs">'+tabs.map(x=>'<button class="tab '+(state.route===x?'active':'')+'" onclick="nav(\''+x+'\')">'+x[0].toUpperCase()+x.slice(1)+'</button>').join('')+'</div><div class="top-actions">'+(c?'<span class="avatar">'+esc((c.name||'?').trim()[0])+'</span><button class="btn-ghost" onclick="logout()">Sign out</button>':'<button class="btn-ghost" onclick="auth(\'login\')">Sign in</button><button class="btn btn-primary btn-sm" onclick="auth(\'register\')">Open an account</button>')+'</div></div></div>';
 }
 async function render(){
  let html=top()+'<main><div id="page" class="page-enter">';
@@ -47,11 +47,11 @@ async function render(){
   else if(state.route==='profile')html+=profile();
   else html+=landing();
  }catch(e){html+='<div class="card error-card"><div class="section-title">Unable to load</div><h3>'+esc(e.message)+'</h3><button class="btn btn-secondary" onclick="render()">Retry</button></div>'}
- html+='</div></main><footer><div class="wrap">EmCoin Guided Portfolios · institutional-grade MVP interface</div></footer>';
+ html+='</div></main><footer><div class="wrap">X Company Guided Portfolios · institutional-grade MVP interface</div></footer>';
  $('#root').innerHTML=html;
 }
 function landing(){
- return '<div class="hero"><div class="kicker">EmCoin · United Arab Emirates</div><h1>Guided investing, kept on the record.</h1><p class="lead">A small shelf of model portfolios, a risk profile set at onboarding, and a suitability check before every subscription — so nothing moves until it is logged.</p><div class="hero-actions"><button class="btn btn-primary" onclick="auth(\'register\')">Open an account</button><button class="btn btn-secondary" onclick="nav(\'portfolios\')">View the portfolio shelf</button></div><div class="hero-meta"><span>✓ Suitability-led</span><span>✓ Auditable consent</span><span>✓ UAE-focused</span></div></div><hr class="divider"><div class="section-title">The shelf</div><div class="feature-grid"><div class="card"><div class="feature-number">01</div><h3>Defined risk</h3><p class="hint">Investor risk profile and portfolio risk are checked before subscription.</p></div><div class="card"><div class="feature-number">02</div><h3>Recorded decisions</h3><p class="hint">Consents, suitability checks and subscription events are retained.</p></div><div class="card"><div class="feature-number">03</div><h3>Transparent portfolios</h3><p class="hint">Allocation, holdings, performance and documents sit behind each portfolio.</p></div></div>';
+ return '<div class="hero"><div class="kicker">X Company · United Arab Emirates</div><h1>Guided investing, kept on the record.</h1><p class="lead">A small shelf of model portfolios, a risk profile set at onboarding, and a suitability check before every subscription — so nothing moves until it is logged.</p><div class="hero-actions"><button class="btn btn-primary" onclick="auth(\'register\')">Open an account</button><button class="btn btn-secondary" onclick="nav(\'portfolios\')">View the portfolio shelf</button></div><div class="hero-meta"><span>✓ Suitability-led</span><span>✓ Auditable consent</span><span>✓ UAE-focused</span></div></div><hr class="divider"><div class="section-title">The shelf</div><div class="feature-grid"><div class="card"><div class="feature-number">01</div><h3>Defined risk</h3><p class="hint">Investor risk profile and portfolio risk are checked before subscription.</p></div><div class="card"><div class="feature-number">02</div><h3>Recorded decisions</h3><p class="hint">Consents, suitability checks and subscription events are retained.</p></div><div class="card"><div class="feature-number">03</div><h3>Transparent portfolios</h3><p class="hint">Allocation, holdings, performance and documents sit behind each portfolio.</p></div></div>';
 }
 async function portfolios(){
  const ps=await req('/portfolios');
@@ -116,10 +116,10 @@ function profile(){const c=session.customer||{};return '<div class="section-titl
 function auth(mode){
  const login=mode==='login';
  document.body.insertAdjacentHTML('beforeend','<div class="modal-backdrop" id="modal"><div class="modal"><button class="modal-close" onclick="closeModal()">×</button><div class="section-title">'+(login?'Welcome back':'Open an account')+'</div><h2>'+(login?'Sign in':'Start your journey')+'</h2><form id="authform">'+(login?'':'<div class="field"><label>Full name</label><input id="name" required></div>')+'<div class="field"><label>Email</label><input id="email" type="email" required></div>'+(login?'':'<div class="field"><label>Mobile</label><input id="mobile"></div>')+'<div class="field"><label>Password</label><input id="password" type="password" minlength="8" required></div><button class="btn btn-primary btn-block">Continue</button><p class="hint" id="autherr"></p></form></div></div>');
- $('#authform').onsubmit=async e=>{e.preventDefault();try{const body=login?{email:$('#email').value,password:$('#password').value}:{full_name:$('#name').value,email:$('#email').value,password:$('#password').value,mobile:$('#mobile').value};const r=await req('/auth/'+(login?'login':'register'),{method:'POST',body:JSON.stringify(body)});session.token=r.access_token;localStorage.setItem('emcoin_token',session.token);session.customer=await req('/auth/me');closeModal();toast(login?'Signed in successfully':'Account created successfully','success');nav('dashboard')}catch(x){$('#autherr').textContent=x.message}}
+ $('#authform').onsubmit=async e=>{e.preventDefault();try{const body=login?{email:$('#email').value,password:$('#password').value}:{full_name:$('#name').value,email:$('#email').value,password:$('#password').value,mobile:$('#mobile').value};const r=await req('/auth/'+(login?'login':'register'),{method:'POST',body:JSON.stringify(body)});session.token=r.access_token;localStorage.setItem('xcompany_token',session.token);session.customer=await req('/auth/me');closeModal();toast(login?'Signed in successfully':'Account created successfully','success');nav('dashboard')}catch(x){$('#autherr').textContent=x.message}}
 }
 function closeModal(){$('#modal')?.remove()}
-function logout(){localStorage.removeItem('emcoin_token');session.token=null;session.customer=null;toast('Signed out','info');nav('landing')}
+function logout(){localStorage.removeItem('xcompany_token');session.token=null;session.customer=null;toast('Signed out','info');nav('landing')}
 window.nav=nav;window.auth=auth;window.closeModal=closeModal;window.logout=logout;window.suit=suit;window.simulate=simulate;window.subscribe=subscribe;window.confirmSubscribe=confirmSubscribe;window.render=render;
 boot();
 })();
