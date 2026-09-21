@@ -22,3 +22,26 @@ def current_user(authorization:Optional[str]=Header(None)):
         c=s.get(Customer,cid)
         if not c: raise HTTPException(401,"Customer not found")
         return c
+
+
+def admin_token_for(username):
+    if not JWT_SECRET:
+        raise RuntimeError("XCOMPANY_JWT_SECRET is required for admin authentication")
+    return jwt.encode(
+        {"sub":username,"role":"ADMIN","admin":True,"exp":datetime.now(timezone.utc)+timedelta(hours=2)},
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM,
+    )
+
+def current_admin(authorization:Optional[str]=Header(None)):
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(401,"Admin authentication required")
+    try:
+        payload=jwt.decode(authorization.split()[1],JWT_SECRET,algorithms=[JWT_ALGORITHM])
+        if payload.get("role")!="ADMIN" or payload.get("admin") is not True or not payload.get("sub"):
+            raise HTTPException(403,"Admin access required")
+        return {"username":payload["sub"],"role":"ADMIN"}
+    except HTTPException:
+        raise
+    except (JWTError,ValueError,KeyError):
+        raise HTTPException(401,"Invalid admin token")
