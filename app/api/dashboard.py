@@ -17,4 +17,4 @@ def dashboard(c=Depends(current_user)):
         positions=[] if not a else list(s.scalars(select(PortfolioPosition).where(PortfolioPosition.account_id==a.id,PortfolioPosition.quantity>0)).all())
         market_value=sum((p.quantity*p.market_price for p in positions),Decimal("0"))
         unrealized=sum((p.quantity*(p.market_price-p.average_cost) for p in positions),Decimal("0"))
-        return {"accountId":None if not a else a.id,"aum":market_value if positions else invested,"marketValue":market_value if positions else invested,"profitLoss":unrealized,"pendingSubscriptions":pending,"portfolioCount":len(subs),"valuationStatus":"POSITION_BASED" if positions else "SUBSCRIPTION_BASED_ESTIMATE"}
+        return {"accountId":None if not a else a.id,"aum":market_value if positions else invested,"marketValue":market_value if positions else invested,"profitLoss":unrealized,"realizedProfitLoss":sum((p.realized_pnl for p in positions),Decimal("0")),"pendingSubscriptions":pending,"portfolioCount":len(subs),"valuationStatus":"POSITION_BASED" if positions else "SUBSCRIPTION_BASED_ESTIMATE"}
