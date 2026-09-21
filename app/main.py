@@ -137,6 +137,7 @@ class PortfolioHolding(Base):
     instrument_name:Mapped[str]=mapped_column(String(200))
     instrument_type:Mapped[str]=mapped_column(String(50))
     ticker:Mapped[Optional[str]]=mapped_column(String(50),nullable=True)
+    instrument_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("instruments.id"),index=True,nullable=True)
     target_weight:Mapped[Decimal]=mapped_column(Numeric(8,4))
 
 class PortfolioPerformance(Base):
@@ -175,6 +176,7 @@ class PortfolioSubscription(Base):
     subscription_amount:Mapped[Decimal]=mapped_column(Numeric(18,2))
     units:Mapped[Decimal]=mapped_column(Numeric(18,6),default=0)
     status:Mapped[str]=mapped_column(String(40),default="CREATED")
+    portfolio_version_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("portfolio_versions.id"),index=True,nullable=True)
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
 
 class SubscriptionEvent(Base):
@@ -235,6 +237,8 @@ class SuitabilityIn(BaseModel): portfolio_id:UUID
 class SimulatorIn(BaseModel): portfolio_id:UUID; amount:Decimal=Field(gt=0); years:int=Field(ge=1,le=50)
 class SubscriptionIn(BaseModel): portfolio_id:UUID; amount:Decimal=Field(gt=0)
 class ConsentIn(BaseModel): portfolio_id:UUID; consent_type:str; consent_text:str; accepted:bool
+class InstrumentIn(BaseModel): symbol:Optional[str]=None; name:str; instrument_type:str; asset_class:str; currency:str="AED"; isin:Optional[str]=None
+class LedgerEntryIn(BaseModel): account_id:UUID; entry_type:str; direction:str; amount:Decimal=Field(gt=0); currency:str="AED"; units:Decimal=Field(default=0,ge=0); description:str=""
 class TokenOut(BaseModel): access_token:str; token_type:str="bearer"
 
 app=FastAPI(title="EmCoin Guided Portfolios API",version="1.0.0",description="Institutional-grade Guided Portfolios MVP")
