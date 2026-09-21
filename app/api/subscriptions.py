@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import engine
 from app.core.security import current_user
-from app.models import Portfolio,PortfolioSubscription,PortfolioVersion,InvestmentAccount,RiskAssessment,SubscriptionEvent,IdempotencyKey
+from app.models import Portfolio,PortfolioSubscription,PortfolioVersion,InvestmentAccount,RiskAssessment,SuitabilityAssessment,SubscriptionEvent,IdempotencyKey
 from app.schemas import SubscriptionIn
 from app.services.audit import audit
 from fastapi import APIRouter
@@ -32,8 +32,8 @@ def subscribe(request: Request,x:SubscriptionIn,c=Depends(current_user),x_idempo
         s.add(sub); s.flush()
         version=s.scalar(select(PortfolioVersion).where(PortfolioVersion.portfolio_id==p.id,PortfolioVersion.status=="ACTIVE").order_by(PortfolioVersion.version_number.desc()))
         if version: sub.portfolio_version_id=version.id
-        s.add(SubscriptionEvent(subscription_id=sub.id,event_type="CREATED")); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="SUITABILITY_CHECKED")); audit(s,c,"SUBSCRIPTION_CREATED","PortfolioSubscription",sub.id,request=request); s.commit()
-        return {"subscriptionId":sub.id,"status":sub.status,"portfolioId":sub.portfolio_id,"portfolioVersionId":sub.portfolio_version_id,"amount":sub.subscription_amount,"currency":p.base_currency,"createdAt":sub.created_at}
+        s.add(SubscriptionEvent(subscription_id=sub.id,event_type="CREATED")); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="SUITABILITY_CHECKED"));(s,c,"SUBSCRIPTION_CREATED","PortfolioSubscription",sub.id,request=request); s.commit()
+        return response
 
 @router.get("/api/v1/subscriptions")
 def subscriptions(c=Depends(current_user)):
