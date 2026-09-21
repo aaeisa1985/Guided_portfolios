@@ -1,4 +1,6 @@
-from fastapi import Depends,Request
+from datetime import datetime,timedelta,timezone
+from uuid import uuid4
+from fastapi import Depends,HTTPException,Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import engine
@@ -10,10 +12,10 @@ from fastapi import APIRouter
 router=APIRouter()
 
 @router.post("/api/v1/auth/register",response_model=TokenOut)
-def register(request: Request,x:RegisterIn):
+def register(request:Request,x:RegisterIn):
     with Session(engine) as s:
         if s.scalar(select(Customer).where(Customer.email==x.email)): raise HTTPException(409,"Email already registered")
-        c=Customer(customer_id="C-"+uuid4().hex[:10].upper(),full_name=x.full_name,email=x.email,mobile=x.mobile,password_hash=pwd.hash(x.password))
+        c=Customer(customer_id="C-"+uuid4().hex[:10].upper(),full_name=x.full_name,email=x.email,mobile=x.mobile,password_hash=hash_password(x.password))
         s.add(c); s.flush()
         s.add(InvestmentAccount(customer_id=c.id,account_number="ACC-"+uuid4().hex[:12].upper()))
         s.add(RiskAssessment(customer_id=c.id,risk_score=50,risk_category="BALANCED",expiry_date=datetime.now(timezone.utc)+timedelta(days=365)))
@@ -24,7 +26,7 @@ def register(request: Request,x:RegisterIn):
 def login(x:LoginIn):
     with Session(engine) as s:
         c=s.scalar(select(Customer).where(Customer.email==x.email))
-        if not c or not pwd.verify(x.password,c.password_hash): raise HTTPException(401,"Invalid credentials")
+        if not c or not verify_password(x.password,c.password_hash): raise HTTPException(401,"Invalid credentials")
         return {"access_token":token_for(c)}
 
 @router.get("/api/v1/auth/me")
