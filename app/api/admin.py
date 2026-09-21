@@ -107,7 +107,8 @@ def execute_order(request: Request,order_id:UUID,x:ExecutionIn,c=Depends(current
         except ValueError as e:
             s.rollback()
             raise HTTPException(400,str(e))
-    \n@router.post("/api/v1/admin/orders/{order_id}/cancel")
+    
+@router.post("/api/v1/admin/orders/{order_id}/cancel")
 def cancel_order(request: Request,order_id:UUID,c=Depends(current_user)):
     require_staff(c)
     with Session(engine) as s:
@@ -138,7 +139,8 @@ def create_valuation(request: Request,account_id:UUID,c=Depends(current_user)):
         snap=ValuationSnapshot(account_id=account_id,market_value=market,cash_value=cash,nav=market+cash,currency=account.base_currency,price_source="INTERNAL_POSITION_PRICES")
         s.add(snap); s.flush(); audit(s,c,"VALUATION_SNAPSHOT_CREATED","ValuationSnapshot",snap.id,request=request); s.commit()
         return {"id":snap.id,"accountId":account_id,"asOf":snap.as_of,"cashValue":snap.cash_value,"marketValue":snap.market_value,"nav":snap.nav,"currency":snap.currency,"priceSource":snap.price_source}
-\n@router.get("/api/v1/admin/ledger/{account_id}")
+
+@router.get("/api/v1/admin/ledger/{account_id}")
 def account_ledger(account_id:UUID,c=Depends(current_user)):
     require_staff(c)
     with Session(engine) as s:
