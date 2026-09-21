@@ -79,3 +79,37 @@ class InvestmentOrder(Base):
     status:Mapped[str]=mapped_column(String(30),default="PENDING")
     idempotency_key:Mapped[Optional[str]]=mapped_column(String(200),nullable=True,index=True)
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class LedgerJournal(Base):
+    __tablename__="ledger_journals"
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    account_id:Mapped[UUID]=mapped_column(ForeignKey("investment_accounts.id"),index=True)
+    reference_type:Mapped[str]=mapped_column(String(50))
+    reference_id:Mapped[Optional[UUID]]=mapped_column(nullable=True,index=True)
+    currency:Mapped[str]=mapped_column(String(3),default="AED")
+    description:Mapped[str]=mapped_column(Text,default="")
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class ExecutionFill(Base):
+    __tablename__="execution_fills"
+    __table_args__=(UniqueConstraint("execution_id",name="uq_execution_fill_execution_id"),)
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    order_id:Mapped[UUID]=mapped_column(ForeignKey("investment_orders.id"),index=True)
+    execution_id:Mapped[str]=mapped_column(String(200))
+    quantity:Mapped[Decimal]=mapped_column(Numeric(24,8))
+    price:Mapped[Decimal]=mapped_column(Numeric(24,8))
+    fees:Mapped[Decimal]=mapped_column(Numeric(18,2),default=0)
+    executed_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class ValuationSnapshot(Base):
+    __tablename__="valuation_snapshots"
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    account_id:Mapped[UUID]=mapped_column(ForeignKey("investment_accounts.id"),index=True)
+    portfolio_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("portfolios.id"),index=True,nullable=True)
+    as_of:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),index=True)
+    cash_value:Mapped[Decimal]=mapped_column(Numeric(18,2),default=0)
+    market_value:Mapped[Decimal]=mapped_column(Numeric(18,2),default=0)
+    nav:Mapped[Decimal]=mapped_column(Numeric(18,2),default=0)
+    currency:Mapped[str]=mapped_column(String(3),default="AED")
+    price_source:Mapped[str]=mapped_column(String(120),default="INTERNAL")
