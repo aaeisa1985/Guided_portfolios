@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import engine
 from app.core.security import current_user
 from app.models import *
-from app.schemas import InstrumentIn,LedgerEntryIn,OrderIn
+from app.schemas import InstrumentIn,LedgerEntryIn,OrderIn,ExecutionIn
 from app.services.audit import audit
 from fastapi import APIRouter
 router=APIRouter()
@@ -91,7 +91,23 @@ def create_order(request: Request,x:OrderIn,c=Depends(current_user),x_idempotenc
         s.add(o); s.flush(); audit(s,c,"ORDER_CREATED","InvestmentOrder",o.id,request=request); s.commit()
         return {"id":o.id,"status":o.status,"side":o.side,"quantity":o.quantity,"createdAt":o.created_at}
 
-@router.post("/api/v1/admin/orders/{order_id}/cancel")
+@router.post("/api/v1/admin/orders/{order_id}/executions")
+def execute_order(request: Request,order_id:UUID,x:ExecutionIn,c=Depends(current_user)):
+    require_staff(c)
+    from app.services.execution import apply_execution
+    with Session(engine) as s:
+        o=s.get(InvestmentOrder,order_id)
+        if not o: raise HTTPException(404,"Order not found")
+        if o.status in ("CANCELLED","FILLED"): raise HTTPException(400,"Order cannot receive another execution")
+        try:
+            fill=apply_execution(s,o,x.execution_id,x.quantity,x.price,x.fees)
+            audit(s,c,"ORDER_EXECUTED","ExecutionFill",fill.id,request=request)
+            s.commit()
+            return {"executionId":fill.execution_id,"orderId":o.id,"status":o.status,"quantity":fill.quantity,"price":fill.price,"fees":fill.fees}
+        except ValueError as e:
+            s.rollback()
+            raise HTTPException(400,str(e))
+    \n@router.post("/api/v1/admin/orders/{order_id}/cancel")
 def cancel_order(request: Request,order_id:UUID,c=Depends(current_user)):
     require_staff(c)
     with Session(engine) as s:
@@ -109,7 +125,20 @@ def create_ledger_entry(request: Request,x:LedgerEntryIn,c=Depends(current_user)
         e=LedgerEntry(**x.model_dump()); s.add(e); s.flush(); audit(s,c,"LEDGER_ENTRY_CREATED","LedgerEntry",e.id,request=request); s.commit()
         return {"id":e.id,"accountId":e.account_id,"entryType":e.entry_type,"direction":e.direction,"amount":e.amount,"currency":e.currency}
 
-@router.get("/api/v1/admin/ledger/{account_id}")
+@router.post("/api/v1/admin/valuations/{account_id}")
+def create_valuation(request: Request,account_id:UUID,c=Depends(current_user)):
+    require_staff(c)
+    with Session(engine) as s:
+        account=s.get(InvestmentAccount,account_id)
+        if not account: raise HTTPException(404,"Investment account not found")
+        positions=s.scalars(select(PortfolioPosition).where(PortfolioPosition.account_id==account_id,PortfolioPosition.quantity>0)).all()
+        market=sum((p.quantity*p.market_price for p in positions),Decimal("0"))
+        rows=s.scalars(select(LedgerEntry).where(LedgerEntry.account_id==account_id,LedgerEntry.ledger_account=="CASH")).all()
+        cash=sum((e.amount if e.direction=="DEBIT" else -e.amount for e in rows),Decimal("0"))
+        snap=ValuationSnapshot(account_id=account_id,market_value=market,cash_value=cash,nav=market+cash,currency=account.base_currency,price_source="INTERNAL_POSITION_PRICES")
+        s.add(snap); s.flush(); audit(s,c,"VALUATION_SNAPSHOT_CREATED","ValuationSnapshot",snap.id,request=request); s.commit()
+        return {"id":snap.id,"accountId":account_id,"asOf":snap.as_of,"cashValue":snap.cash_value,"marketValue":snap.market_value,"nav":snap.nav,"currency":snap.currency,"priceSource":snap.price_source}
+\n@router.get("/api/v1/admin/ledger/{account_id}")
 def account_ledger(account_id:UUID,c=Depends(current_user)):
     require_staff(c)
     with Session(engine) as s:
