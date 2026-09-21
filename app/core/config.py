@@ -4,6 +4,7 @@ from sqlalchemy.engine import make_url
 PRODUCT_NAME=os.getenv("PRODUCT_NAME","X Company")
 PRODUCT_SLUG=os.getenv("PRODUCT_SLUG","x-company")
 
+# Vercel's deployed filesystem is read-only; SQLite fallback must live in /tmp.
 _default_db="sqlite:////tmp/xcompany.db"
 _raw_db=os.getenv("DATABASE_URL","").strip()
 try:
