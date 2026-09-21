@@ -1,6 +1,6 @@
-"""Initial EmCoin schema."""
+"""Initial generic Guided Portfolios schema."""
 from alembic import op
-from app.main import Base
+from app.models import Base
 revision="0001_initial"
 down_revision=None
 branch_labels=None
