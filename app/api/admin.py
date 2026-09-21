@@ -38,15 +38,25 @@ def admin_login(x:AdminLoginIn):
         raise HTTPException(401,"Invalid admin credentials")
     try:
         token=admin_token_for(username)
-    except Exception:
-        raise HTTPException(503,"Admin authentication service is misconfigured")
+    except Exception as exc:
+        raise HTTPException(503,f"Admin authentication service error: {type(exc).__name__}")
     return {"access_token":token,"token_type":"bearer"}
 
 @router.get("/api/v1/admin/auth/health")
 def admin_auth_health():
+    jwt_encode_works=False
+    jwt_error=None
+    if JWT_SECRET:
+        try:
+            admin_token_for("health-check")
+            jwt_encode_works=True
+        except Exception as exc:
+            jwt_error=type(exc).__name__
     return {
         "adminCredentialsConfigured":bool(ADMIN_USERNAME and ADMIN_PASSWORD),
         "jwtConfigured":bool(JWT_SECRET),
+        "jwtEncodeWorks":jwt_encode_works,
+        "jwtError":jwt_error,
     }
 
 @router.get("/api/v1/admin/auth/me")
