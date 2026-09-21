@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import os, secrets
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -13,9 +14,12 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 
-DATABASE_URL="sqlite:///./emcoin.db"
-SECRET="change-me-in-production"
+DATABASE_URL=os.getenv("DATABASE_URL","sqlite:///./data/emcoin.db")
+SECRET=os.getenv("EMCOIN_JWT_SECRET","dev-only-change-this-secret")
 ALGORITHM="HS256"
+CORS_ORIGINS=[x.strip() for x in os.getenv("CORS_ORIGINS","http://localhost:8000,http://127.0.0.1:8000").split(",") if x.strip()]
+if DATABASE_URL.startswith("sqlite:///./data/"):
+    os.makedirs("data",exist_ok=True)
 pwd=CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class Base(DeclarativeBase): pass
@@ -188,7 +192,16 @@ class ConsentIn(BaseModel): portfolio_id:UUID; consent_type:str; consent_text:st
 class TokenOut(BaseModel): access_token:str; token_type:str="bearer"
 
 app=FastAPI(title="EmCoin Guided Portfolios API",version="1.0.0",description="Institutional-grade Guided Portfolios MVP")
-app.add_middleware(CORSMiddleware,allow_origins=["*"],allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
+app.add_middleware(CORSMiddleware,allow_origins=CORS_ORIGINS,allow_credentials=True,allow_methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],allow_headers=["Authorization","Content-Type","X-Request-ID","X-Idempotency-Key"])
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response=await call_next(request)
+    response.headers["X-Content-Type-Options"]="nosniff"
+    response.headers["X-Frame-Options"]="DENY"
+    response.headers["Referrer-Policy"]="strict-origin-when-cross-origin"
+    response.headers["X-Request-ID"]=request.headers.get("X-Request-ID",secrets.token_hex(8))
+    return response
 
 def token_for(c:Customer):
     return jwt.encode({"sub":str(c.id),"role":c.role,"exp":datetime.now(timezone.utc)+timedelta(hours=1)},SECRET,algorithm=ALGORITHM)
@@ -282,7 +295,7 @@ def subscribe(x:SubscriptionIn,c=Depends(current_user)):
         if not suit or not suit.is_suitable: raise HTTPException(400,"Suitability check must pass before subscription")
         sub=PortfolioSubscription(account_id=account.id,portfolio_id=p.id,subscription_amount=x.amount,status="PAYMENT_PENDING")
         s.add(sub); s.flush(); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="CREATED")); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="SUITABILITY_CHECKED")); audit(s,c,"SUBSCRIPTION_CREATED","PortfolioSubscription",sub.id); s.commit()
-        return {"subscriptionId":sub.id,"status":sub.status}
+        return {"subscriptionId":sub.id,"status":sub.status,"portfolioId":sub.portfolio_id,"amount":sub.subscription_amount,"currency":p.base_currency,"createdAt":sub.created_at}
 
 @app.get("/api/v1/subscriptions")
 def subscriptions(c=Depends(current_user)):
@@ -290,7 +303,7 @@ def subscriptions(c=Depends(current_user)):
         a=s.scalar(select(InvestmentAccount).where(InvestmentAccount.customer_id==c.id))
         if not a:return []
         rows=list(s.scalars(select(PortfolioSubscription).where(PortfolioSubscription.account_id==a.id).order_by(PortfolioSubscription.created_at.desc())).all())
-        return rows
+        return [{"id":x.id,"portfolio_id":x.portfolio_id,"portfolio_name":(s.get(Portfolio,x.portfolio_id).name if s.get(Portfolio,x.portfolio_id) else "Portfolio"),"subscription_amount":x.subscription_amount,"units":x.units,"status":x.status,"created_at":x.created_at,"currency":(s.get(Portfolio,x.portfolio_id).base_currency if s.get(Portfolio,x.portfolio_id) else "AED")} for x in rows]
 
 @app.get("/api/v1/subscriptions/{subscription_id}")
 def subscription(subscription_id:UUID,c=Depends(current_user)):
@@ -310,6 +323,12 @@ def consent(x:ConsentIn,c=Depends(current_user)):
         row=PortfolioConsent(customer_id=c.id,portfolio_id=p.id,consent_type=x.consent_type,consent_text=x.consent_text,accepted=x.accepted,disclosure_hash=digest)
         s.add(row); audit(s,c,"CONSENT_RECORDED","PortfolioConsent",row.id); s.commit()
         return {"consentId":row.id,"accepted":row.accepted,"disclosureHash":digest}
+
+@app.get("/api/v1/activity")
+def activity(limit:int=Query(50,ge=1,le=200),c=Depends(current_user)):
+    with Session(engine) as s:
+        rows=list(s.scalars(select(AuditLog).where(AuditLog.actor_id==c.id).order_by(AuditLog.created_at.desc()).limit(limit)).all())
+        return [{"id":x.id,"action":x.action,"entity_type":x.entity_type,"entity_id":x.entity_id,"created_at":x.created_at} for x in rows]
 
 @app.get("/api/v1/dashboard")
 def dashboard(c=Depends(current_user)):
