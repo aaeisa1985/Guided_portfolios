@@ -3,7 +3,7 @@ uvicorn[standard]>=0.35,<1
 sqlalchemy>=2.0.43,<3
 python-jose[cryptography]>=3.5,<4
 passlib[bcrypt]>=1.7,<2
-bcrypt>=4.0,<5
+bcrypt==4.0.1
 python-multipart>=0.0.20,<1
 email-validator>=2.3,<3
 
