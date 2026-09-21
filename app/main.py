@@ -412,6 +412,60 @@ def audit_logs(c=Depends(current_user),limit:int=Query(100,le=500)):
     if c.role not in (Role.admin.value,Role.manager.value): raise HTTPException(403,"Admin or manager required")
     with Session(engine) as s:return list(s.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)).all())
 
+def require_staff(c):
+    if c.role not in (Role.admin.value,Role.manager.value):
+        raise HTTPException(403,"Manager or admin role required")
+
+@app.post("/api/v1/admin/instruments")
+def create_instrument(x:InstrumentIn,c=Depends(current_user)):
+    require_staff(c)
+    with Session(engine) as s:
+        if x.symbol and s.scalar(select(Instrument).where(Instrument.symbol==x.symbol)): raise HTTPException(409,"Instrument symbol already exists")
+        i=Instrument(**x.model_dump()); s.add(i); s.flush(); audit(s,c,"INSTRUMENT_CREATED","Instrument",i.id); s.commit()
+        return {"id":i.id,"symbol":i.symbol,"name":i.name,"status":i.status}
+
+@app.get("/api/v1/admin/instruments")
+def list_instruments(c=Depends(current_user)):
+    require_staff(c)
+    with Session(engine) as s:
+        return list(s.scalars(select(Instrument).order_by(Instrument.name)).all())
+
+@app.post("/api/v1/admin/portfolios/{portfolio_id}/versions")
+def create_portfolio_version(portfolio_id:UUID,c=Depends(current_user)):
+    require_staff(c)
+    with Session(engine) as s:
+        if not s.get(Portfolio,portfolio_id): raise HTTPException(404,"Portfolio not found")
+        n=(s.scalar(select(PortfolioVersion.version_number).where(PortfolioVersion.portfolio_id==portfolio_id).order_by(PortfolioVersion.version_number.desc())) or 0)+1
+        v=PortfolioVersion(portfolio_id=portfolio_id,version_number=n,status="DRAFT"); s.add(v); s.flush(); audit(s,c,"PORTFOLIO_VERSION_CREATED","PortfolioVersion",v.id); s.commit()
+        return {"id":v.id,"portfolioId":portfolio_id,"versionNumber":n,"status":v.status}
+
+@app.post("/api/v1/admin/portfolios/{portfolio_id}/versions/{version_id}/approve")
+def approve_portfolio_version(portfolio_id:UUID,version_id:UUID,c=Depends(current_user)):
+    require_staff(c)
+    with Session(engine) as s:
+        v=s.scalar(select(PortfolioVersion).where(PortfolioVersion.id==version_id,PortfolioVersion.portfolio_id==portfolio_id))
+        if not v: raise HTTPException(404,"Portfolio version not found")
+        for a in s.scalars(select(PortfolioVersion).where(PortfolioVersion.portfolio_id==portfolio_id,PortfolioVersion.status=="ACTIVE")).all(): a.status="SUPERSEDED"
+        v.status="ACTIVE"; v.effective_at=datetime.now(timezone.utc); v.approved_by=c.id
+        audit(s,c,"PORTFOLIO_VERSION_APPROVED","PortfolioVersion",v.id); s.commit()
+        return {"id":v.id,"versionNumber":v.version_number,"status":v.status,"effectiveAt":v.effective_at}
+
+@app.post("/api/v1/admin/ledger")
+def create_ledger_entry(x:LedgerEntryIn,c=Depends(current_user)):
+    require_staff(c)
+    with Session(engine) as s:
+        if not s.get(InvestmentAccount,x.account_id): raise HTTPException(404,"Investment account not found")
+        e=LedgerEntry(**x.model_dump()); s.add(e); s.flush(); audit(s,c,"LEDGER_ENTRY_CREATED","LedgerEntry",e.id); s.commit()
+        return {"id":e.id,"accountId":e.account_id,"entryType":e.entry_type,"direction":e.direction,"amount":e.amount,"currency":e.currency}
+
+@app.get("/api/v1/admin/ledger/{account_id}")
+def account_ledger(account_id:UUID,c=Depends(current_user)):
+    require_staff(c)
+    with Session(engine) as s:
+        rows=list(s.scalars(select(LedgerEntry).where(LedgerEntry.account_id==account_id).order_by(LedgerEntry.created_at)).all())
+        balance=sum((x.amount if x.direction=="CREDIT" else -x.amount) for x in rows)
+        return {"accountId":account_id,"balance":balance,"entries":rows}
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
