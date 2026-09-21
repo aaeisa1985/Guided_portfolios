@@ -44,6 +44,6 @@ def test_execution_updates_position_and_balances_ledger():
         pos=s.query(PortfolioPosition).one()
         assert pos.quantity==Decimal("10")
         assert pos.average_cost==Decimal("100.20")
-        journal_id=s.query(LedgerEntry.journal_id).one()[0]
+        journal_id=s.query(LedgerEntry.journal_id).first()[0]
         assert assert_journal_balanced(s,journal_id)
         s.commit()
