@@ -30,3 +30,6 @@ else:
 JWT_SECRET=os.getenv("XCOMPANY_JWT_SECRET")
 JWT_ALGORITHM=os.getenv("JWT_ALGORITHM","HS256")
 CORS_ORIGINS=[x.strip() for x in os.getenv("CORS_ORIGINS","http://localhost:8000,http://127.0.0.1:8000").split(",") if x.strip()]
+
+ADMIN_USERNAME=os.getenv("ADMIN_USERNAME","").strip()
+ADMIN_PASSWORD=os.getenv("ADMIN_PASSWORD","")
