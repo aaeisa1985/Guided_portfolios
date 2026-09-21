@@ -14,13 +14,11 @@ from fastapi import APIRouter
 router=APIRouter()
 
 @router.post("/api/v1/subscriptions")
-def subscribe(request: Request,x:SubscriptionIn,c=Depends(current_user),x_idempotency_key:Optional[str]=Header(None,alias="X-Idempotency-Key")):
+def subscribe(request:Request,x:SubscriptionIn,c=Depends(current_user),x_idempotency_key:Optional[str]=Header(None,alias="X-Idempotency-Key")):
     with Session(engine) as s:
         if x_idempotency_key:
             prior=s.scalar(select(IdempotencyKey).where(IdempotencyKey.customer_id==c.id,IdempotencyKey.key==x_idempotency_key,IdempotencyKey.endpoint=="POST:/api/v1/subscriptions"))
-            if prior:
-                import json
-                return json.loads(prior.response_body)
+            if prior: return json.loads(prior.response_body)
         p=s.get(Portfolio,x.portfolio_id)
         if not p: raise HTTPException(404,"Portfolio not found")
         if x.amount<p.minimum_investment: raise HTTPException(400,f"Minimum investment is {p.minimum_investment} {p.base_currency}")
@@ -32,7 +30,13 @@ def subscribe(request: Request,x:SubscriptionIn,c=Depends(current_user),x_idempo
         s.add(sub); s.flush()
         version=s.scalar(select(PortfolioVersion).where(PortfolioVersion.portfolio_id==p.id,PortfolioVersion.status=="ACTIVE").order_by(PortfolioVersion.version_number.desc()))
         if version: sub.portfolio_version_id=version.id
-        s.add(SubscriptionEvent(subscription_id=sub.id,event_type="CREATED")); s.add(SubscriptionEvent(subscription_id=sub.id,event_type="SUITABILITY_CHECKED"));(s,c,"SUBSCRIPTION_CREATED","PortfolioSubscription",sub.id,request=request); s.commit()
+        s.add(SubscriptionEvent(subscription_id=sub.id,event_type="CREATED"))
+        s.add(SubscriptionEvent(subscription_id=sub.id,event_type="SUITABILITY_CHECKED"))
+        audit(s,c,"SUBSCRIPTION_CREATED","PortfolioSubscription",sub.id,request=request)
+        response={"subscriptionId":sub.id,"status":sub.status,"portfolioId":sub.portfolio_id,"portfolioVersionId":sub.portfolio_version_id,"amount":sub.subscription_amount,"currency":p.base_currency,"createdAt":sub.created_at}
+        if x_idempotency_key:
+            s.add(IdempotencyKey(customer_id=c.id,key=x_idempotency_key,endpoint="POST:/api/v1/subscriptions",response_status=200,response_body=json.dumps(response,default=str)))
+        s.commit()
         return response
 
 @router.get("/api/v1/subscriptions")
