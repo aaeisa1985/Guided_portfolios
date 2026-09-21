@@ -17,7 +17,9 @@ Customer → Authentication → Investor/Risk Profile → Portfolio Shelf → Su
 - Subscription lifecycle and subscription detail
 - Recorded disclosure consent with SHA-256 disclosure hash
 - Instrument master and portfolio versioning foundation
-- Idempotent subscription creation with `X-Idempotency-Key`
+- Idempotent subscription and order foundations with `X-Idempotency-Key`
+- Customer positions, order lifecycle and ledger views
+- Position-based valuation / unrealized P&L when positions are recorded
 - Append-only ledger entry foundation with staff controls
 - Manager/admin controls for instruments, portfolio versions and ledger
 - Customer activity/audit timeline
@@ -42,6 +44,8 @@ uvicorn app.main:app --reload
 
 Open `http://localhost:8000`.
 
+For Docker, the API uses the PostgreSQL `db` service automatically; the database volume is persistent. Health endpoints are `/health` and `/health/ready`.
+
 ## Docker
 
 ```bash
@@ -60,4 +64,4 @@ Register an account, promote that customer to ADMIN in the database, then POST `
 
 The MVP deliberately keeps the domain model explicit so it can evolve into managed accounts, robo-advisory, asset management and fund workflows.
 
-Current infrastructure uses PostgreSQL + Alembic migrations in Docker. The investment domain now includes instrument records, portfolio versions, idempotent subscriptions and a ledger foundation. Before production launch, harden ledger immutability, add managed secrets, real KYC/AML, payment/custody integrations, maker-checker approvals, object storage for documents, notifications, observability, rate limiting and UAE-specific regulatory controls.
+Current infrastructure uses PostgreSQL + Alembic migrations in Docker. The investment domain now includes instrument records, portfolio versions, idempotent subscriptions and a ledger foundation. Before production launch, harden ledger immutability and double-entry enforcement, add managed secrets, real KYC/AML, payment/custody integrations, maker-checker approvals, object storage for documents, notifications, observability, rate limiting and UAE-specific regulatory controls.
