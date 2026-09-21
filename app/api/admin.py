@@ -14,7 +14,7 @@ from fastapi import APIRouter
 router=APIRouter()
 
 from secrets import compare_digest
-from app.core.config import ADMIN_USERNAME,ADMIN_PASSWORD
+from app.core.config import ADMIN_USERNAME,ADMIN_PASSWORD,JWT_SECRET
 
 def _admin_audit(session,admin,action,entity,entity_id=None,request=None):
     session.add(AuditLog(
@@ -29,11 +29,25 @@ def _admin_audit(session,admin,action,entity,entity_id=None,request=None):
 
 @router.post("/api/v1/admin/auth/login")
 def admin_login(x:AdminLoginIn):
+    username=x.username.strip()
     if not ADMIN_USERNAME or not ADMIN_PASSWORD:
         raise HTTPException(503,"Admin credentials are not configured")
-    if not compare_digest(x.username,ADMIN_USERNAME) or not compare_digest(x.password,ADMIN_PASSWORD):
+    if not JWT_SECRET:
+        raise HTTPException(503,"Admin signing key is not configured")
+    if not compare_digest(username,ADMIN_USERNAME) or not compare_digest(x.password,ADMIN_PASSWORD):
         raise HTTPException(401,"Invalid admin credentials")
-    return {"access_token":admin_token_for(x.username),"token_type":"bearer"}
+    try:
+        token=admin_token_for(username)
+    except Exception:
+        raise HTTPException(503,"Admin authentication service is misconfigured")
+    return {"access_token":token,"token_type":"bearer"}
+
+@router.get("/api/v1/admin/auth/health")
+def admin_auth_health():
+    return {
+        "adminCredentialsConfigured":bool(ADMIN_USERNAME and ADMIN_PASSWORD),
+        "jwtConfigured":bool(JWT_SECRET),
+    }
 
 @router.get("/api/v1/admin/auth/me")
 def admin_me(admin=Depends(current_admin)):
