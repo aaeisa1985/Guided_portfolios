@@ -67,3 +67,12 @@ Register an account, promote that customer to ADMIN in the database, then POST `
 The MVP deliberately keeps the domain model explicit so it can evolve into managed accounts, robo-advisory, asset management and fund workflows.
 
 Current infrastructure uses PostgreSQL + Alembic migrations in Docker. The investment domain now includes instrument records, portfolio versions, idempotent subscriptions and a ledger foundation. Before production launch, harden ledger immutability and double-entry enforcement, add managed secrets, real KYC/AML, payment/custody integrations, maker-checker approvals, object storage for documents, notifications, observability, rate limiting and UAE-specific regulatory controls.
+
+
+## Corporate Actions Engine
+
+The engine supports SPLIT, REVERSE_SPLIT, CASH_DIVIDEND, STOCK_DIVIDEND, RIGHTS_ISSUE and MERGER.
+
+Lifecycle: DRAFT -> APPROVED -> PROCESSING -> COMPLETED/FAILED. Maker/checker approval is enforced, positions are locked during execution, per-position snapshots are stored, and ledger journals are generated for financial or memo impacts.
+
+Database migration: `0007_corporate_actions.py`.

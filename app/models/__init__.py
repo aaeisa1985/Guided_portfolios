@@ -7,3 +7,4 @@ from .subscription import PortfolioSubscription, SubscriptionEvent
 from .consent import PortfolioConsent
 from .transaction import Transaction
 from .audit import AuditLog
+from .corporate_action import CorporateAction, CorporateActionEvent
