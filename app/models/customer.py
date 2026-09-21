@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 from sqlalchemy import String, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from .base import Base
+from .base import Base, Role
 
 class Customer(Base):
     __tablename__="customers"
