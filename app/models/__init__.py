@@ -1,0 +1,1 @@
+from app.main import Customer,InvestmentAccount,RiskAssessment,Portfolio,PortfolioAllocation,PortfolioHolding,PortfolioPerformance,PortfolioDocument,SuitabilityAssessment,PortfolioSubscription,SubscriptionEvent,PortfolioConsent,Transaction,AuditLog
