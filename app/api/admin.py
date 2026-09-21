@@ -116,7 +116,4 @@ def account_ledger(account_id:UUID,c=Depends(current_user)):
         balance=sum((x.amount if x.direction=="CREDIT" else -x.amount) for x in rows)
         return {"accountId":account_id,"balance":balance,"entries":rows}
 
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
-app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
