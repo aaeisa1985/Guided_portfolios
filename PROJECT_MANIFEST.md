@@ -1,7 +1,15 @@
-# EmCoin MVP Project Manifest
+# Project Manifest
 
-Institutional-grade foundation: PostgreSQL schema, SQLAlchemy 2 async ORM, Alembic migrations, FastAPI REST/OpenAPI, JWT authentication + RBAC, suitability service, portfolio simulator, subscription lifecycle + events, consents, audit log, dashboard, Dockerized local stack and health test.
+This is the runnable MVP implementation, not only an ERD.
 
-Entities: Customer, InvestmentAccount, RiskAssessment, Portfolio, PortfolioAllocation, PortfolioHolding, PortfolioPerformance, PortfolioDocument, SuitabilityAssessment, PortfolioSubscription, PortfolioConsent, Transaction, SubscriptionEvent, AuditLog.
+### Backend
+FastAPI + SQLAlchemy + JWT + RBAC.
 
-Customer, InvestmentAccount and Portfolio are deliberately separated for future Robo-Advisory, managed accounts, Asset Management and Funds.
+### Domain
+Customer, InvestmentAccount, RiskAssessment, Portfolio, PortfolioAllocation, PortfolioHolding, PortfolioPerformance, PortfolioDocument, SuitabilityAssessment, PortfolioSubscription, SubscriptionEvent, PortfolioConsent, Transaction, AuditLog.
+
+### APIs
+Auth, portfolios, suitability, simulator, subscriptions, consents, dashboard and admin.
+
+### Design intent
+The domain boundaries are designed for future Robo-Advisory, Asset Management, managed accounts and fund vehicles without making User the root of the investment model.
