@@ -1,6 +1,6 @@
 import os
-os.environ["EMCOIN_JWT_SECRET"]="test-secret-for-suite"
-os.environ["DATABASE_URL"]="sqlite:///./data/test_emcoin.db"
+os.environ["XCOMPANY_JWT_SECRET"]="test-secret-for-suite"
+os.environ["DATABASE_URL"]="sqlite:///./data/test_xcompany.db"
 
 from fastapi.testclient import TestClient
 from app.main import app, Base, engine
