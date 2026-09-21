@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
-from sqlalchemy import String, DateTime, Numeric, Text, ForeignKey
+from sqlalchemy import String, DateTime, Numeric, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 
@@ -30,6 +30,7 @@ class PortfolioVersion(Base):
 
 class IdempotencyKey(Base):
     __tablename__="idempotency_keys"
+    __table_args__=(UniqueConstraint("customer_id","key","endpoint",name="uq_idempotency_customer_key_endpoint"),)
     id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
     customer_id:Mapped[UUID]=mapped_column(ForeignKey("customers.id"),index=True)
     key:Mapped[str]=mapped_column(String(200))
@@ -66,6 +67,7 @@ class PortfolioPosition(Base):
 
 class InvestmentOrder(Base):
     __tablename__="investment_orders"
+    __table_args__=(UniqueConstraint("idempotency_key",name="uq_investment_order_idempotency_key"),)
     id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
     account_id:Mapped[UUID]=mapped_column(ForeignKey("investment_accounts.id"),index=True)
     portfolio_id:Mapped[UUID]=mapped_column(ForeignKey("portfolios.id"),index=True)
