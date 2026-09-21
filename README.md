@@ -1,4 +1,4 @@
-# EmCoin Guided Portfolios
+# X Company Guided Portfolios
 
 A production-oriented Guided Portfolios MVP combining an institutional-style web experience with a FastAPI domain backend.
 
@@ -32,7 +32,7 @@ Customer → Authentication → Investor/Risk Profile → Portfolio Shelf → Su
 
 ## Local run
 
-Copy `.env.example` to `.env`, set a strong `EMCOIN_JWT_SECRET`, then:
+Copy `.env.example` to `.env`, set a strong `XCOMPANY_JWT_SECRET`, then:
 
 ```bash
 python -m venv .venv
@@ -50,7 +50,7 @@ For Docker, the API uses the PostgreSQL `db` service automatically; the database
 
 ```bash
 cp .env.example .env
-# Set EMCOIN_JWT_SECRET in .env
+# Set XCOMPANY_JWT_SECRET in .env
 docker compose up --build
 ```
 
