@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.core.config import CORS_ORIGINS,PRODUCT_NAME
+from app.core.database import engine
+from app.models import Base
 from app.api.health import router as health_router
 from app.api.auth import router as auth_router
 from app.api.portfolios import router as portfolios_router
