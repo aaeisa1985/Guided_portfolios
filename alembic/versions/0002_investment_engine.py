@@ -59,18 +59,20 @@ def upgrade():
         op.create_index("ix_ledger_entries_account_id","ledger_entries",["account_id"])
     cols={x["name"] for x in insp.get_columns("portfolio_holdings")}
     if "instrument_id" not in cols:
-        op.add_column("portfolio_holdings",sa.Column("instrument_id",sa.Uuid(),nullable=True))
-        op.create_index("ix_portfolio_holdings_instrument_id","portfolio_holdings",["instrument_id"])
-        op.create_foreign_key("fk_portfolio_holdings_instrument","portfolio_holdings","instruments",["instrument_id"],["id"])
+        with op.batch_alter_table("portfolio_holdings") as batch:
+            batch.add_column(sa.Column("instrument_id",sa.Uuid(),nullable=True))
+            batch.create_index("ix_portfolio_holdings_instrument_id",["instrument_id"])
+            batch.create_foreign_key("fk_portfolio_holdings_instrument","instruments",["instrument_id"],["id"])
     cols={x["name"] for x in insp.get_columns("portfolio_subscriptions")}
     if "portfolio_version_id" not in cols:
-        op.add_column("portfolio_subscriptions",sa.Column("portfolio_version_id",sa.Uuid(),nullable=True))
-        op.create_index("ix_portfolio_subscriptions_portfolio_version_id","portfolio_subscriptions",["portfolio_version_id"])
-        op.create_foreign_key("fk_portfolio_subscriptions_version","portfolio_subscriptions","portfolio_versions",["portfolio_version_id"],["id"])
+        with op.batch_alter_table("portfolio_subscriptions") as batch:
+            batch.add_column(sa.Column("portfolio_version_id",sa.Uuid(),nullable=True))
+            batch.create_index("ix_portfolio_subscriptions_portfolio_version_id",["portfolio_version_id"])
+            batch.create_foreign_key("fk_portfolio_subscriptions_version","portfolio_versions",["portfolio_version_id"],["id"])
 
 def downgrade():
-    op.drop_column("portfolio_subscriptions","portfolio_version_id")
-    op.drop_column("portfolio_holdings","instrument_id")
+    with op.batch_alter_table("portfolio_subscriptions") as batch: batch.drop_column("portfolio_version_id")
+    with op.batch_alter_table("portfolio_holdings") as batch: batch.drop_column("instrument_id")
     op.drop_table("ledger_entries")
     op.drop_table("idempotency_keys")
     op.drop_table("portfolio_versions")
