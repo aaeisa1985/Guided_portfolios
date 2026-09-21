@@ -16,12 +16,16 @@ Customer → Authentication → Investor/Risk Profile → Portfolio Shelf → Su
 - Projection simulator with explicit non-guarantee disclaimer
 - Subscription lifecycle and subscription detail
 - Recorded disclosure consent with SHA-256 disclosure hash
+- Instrument master and portfolio versioning foundation
+- Idempotent subscription creation with `X-Idempotency-Key`
+- Append-only ledger entry foundation with staff controls
+- Manager/admin controls for instruments, portfolio versions and ledger
 - Customer activity/audit timeline
 - Dashboard metrics
 - Responsive institutional frontend
 - NAV chart with dates and gridlines
 - Animated modals and typed toast notifications
-- Docker runtime with persistent SQLite data volume
+- Docker runtime with PostgreSQL 17 and persistent database volume
 - OpenAPI / Swagger
 
 ## Local run
@@ -56,4 +60,4 @@ Register an account, promote that customer to ADMIN in the database, then POST `
 
 The MVP deliberately keeps the domain model explicit so it can evolve into managed accounts, robo-advisory, asset management and fund workflows.
 
-Current infrastructure uses PostgreSQL + Alembic migrations in Docker. Before production launch, add managed secrets, real KYC/AML, payment/custody integrations, immutable accounting/ledger controls, idempotency enforcement, maker-checker approvals, object storage for documents, notifications, observability, rate limiting and UAE-specific regulatory controls.
+Current infrastructure uses PostgreSQL + Alembic migrations in Docker. The investment domain now includes instrument records, portfolio versions, idempotent subscriptions and a ledger foundation. Before production launch, harden ledger immutability, add managed secrets, real KYC/AML, payment/custody integrations, maker-checker approvals, object storage for documents, notifications, observability, rate limiting and UAE-specific regulatory controls.
