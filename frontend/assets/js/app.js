@@ -113,10 +113,39 @@ async function subscriptionDetail(id){
 }
 async function activity(){const xs=await req('/activity');return '<div class="section-title">Activity</div><h2>Your activity log</h2><div class="card">'+(xs.length?xs.map(x=>'<div class="doc-row"><span><b>'+esc(x.action)+'</b><div class="hint">'+esc(x.entity_type)+(x.entity_id?' · '+esc(String(x.entity_id).slice(0,8)):'')+'</div></span><span>'+fmtDate(x.created_at)+'</span></div>').join(''):'<div class="empty"><div class="empty-icon">◌</div><h3>No activity yet</h3><p class="hint">Your suitability, consent and subscription events will appear here.</p></div>')+'</div>'}
 function profile(){const c=session.customer||{};return '<div class="section-title">Profile</div><h2>'+esc(c.name||'Investor')+'</h2><div class="grid-2"><div class="card">'+row('Customer ID',esc(c.customerId||'—'))+row('Email',esc(c.email||'—'))+row('Investor type',esc(c.investorType||'—'))+'</div><div class="card">'+row('KYC',chip(c.kycStatus||'—'))+row('AML',chip(c.amlStatus||'—'))+row('Role',esc(c.role||'—'))+'</div></div>'}
+function pageLoading(message){
+ $('#root').innerHTML='<main><div class="card" style="max-width:720px;margin:12vh auto;text-align:center"><div class="section-title">Guided Portfolios</div><h2>'+esc(message)+'</h2><p class="hint">We are securely loading your workspace.</p><div class="loading-line" aria-hidden="true"><span></span></div></div></main>';
+}
 function auth(mode){
  const login=mode==='login';
- document.body.insertAdjacentHTML('beforeend','<div class="modal-backdrop" id="modal"><div class="modal"><button class="modal-close" onclick="closeModal()">×</button><div class="section-title">'+(login?'Welcome back':'Open an account')+'</div><h2>'+(login?'Sign in':'Start your journey')+'</h2><form id="authform">'+(login?'':'<div class="field"><label>Full name</label><input id="name" required></div>')+'<div class="field"><label>Email</label><input id="email" type="email" required></div>'+(login?'':'<div class="field"><label>Mobile</label><input id="mobile"></div>')+'<div class="field"><label>Password</label><input id="password" type="password" minlength="8" required></div><button class="btn btn-primary btn-block">Continue</button><p class="hint" id="autherr"></p></form></div></div>');
- $('#authform').onsubmit=async e=>{e.preventDefault();try{const body=login?{email:$('#email').value,password:$('#password').value}:{full_name:$('#name').value,email:$('#email').value,password:$('#password').value,mobile:$('#mobile').value};const r=await req('/auth/'+(login?'login':'register'),{method:'POST',body:JSON.stringify(body)});session.token=r.access_token;localStorage.setItem('xcompany_token',session.token);session.customer=await req('/auth/me');closeModal();toast(login?'Signed in successfully':'Account created successfully','success');nav('dashboard')}catch(x){$('#autherr').textContent=x.message}}
+ document.body.insertAdjacentHTML('beforeend','<div class="modal-backdrop" id="modal"><div class="modal"><button class="modal-close" onclick="closeModal()">×</button><div class="section-title">'+(login?'Welcome back':'Open an account')+'</div><h2>'+(login?'Sign in':'Start your journey')+'</h2><form id="authform">'+(login?'':'<div class="field"><label>Full name</label><input id="name" required></div>')+'<div class="field"><label>Email</label><input id="email" type="email" required></div>'+(login?'':'<div class="field"><label>Mobile</label><input id="mobile"></div>')+'<div class="field"><label>Password</label><input id="password" type="password" minlength="8" required></div><button type="submit" class="btn btn-primary btn-block">Continue</button><p class="hint" id="authstatus"></p><p class="hint" id="autherr"></p></form></div></div>');
+ $('#authform').onsubmit=async e=>{
+  e.preventDefault();
+  const btn=e.currentTarget.querySelector('button[type="submit"]');
+  const status=$('#authstatus'),err=$('#autherr');
+  if(btn.disabled)return;
+  btn.disabled=true;
+  btn.textContent=login?'Signing in…':'Creating your account…';
+  status.textContent=login?'Checking your account securely…':'Setting up your guided investing workspace…';
+  err.textContent='';
+  try{
+   const body=login?{email:$('#email').value,password:$('#password').value}:{full_name:$('#name').value,email:$('#email').value,password:$('#password').value,mobile:$('#mobile').value};
+   const r=await req('/auth/'+(login?'login':'register'),{method:'POST',body:JSON.stringify(body)});
+   session.token=r.access_token;
+   localStorage.setItem('xcompany_token',session.token);
+   status.textContent='Account created. Loading your workspace…';
+   session.customer=await req('/auth/me');
+   closeModal();
+   pageLoading(login?'Loading your workspace…':'Setting up your dashboard…');
+   toast(login?'Signed in successfully':'Account created successfully','success');
+   nav('dashboard');
+  }catch(x){
+   btn.disabled=false;
+   btn.textContent='Continue';
+   status.textContent='';
+   err.textContent=x.message;
+  }
+ } 
 }
 function closeModal(){$('#modal')?.remove()}
 function logout(){localStorage.removeItem('xcompany_token');session.token=null;session.customer=null;toast('Signed out','info');nav('landing')}
