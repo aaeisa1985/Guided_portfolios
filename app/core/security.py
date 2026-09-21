@@ -12,7 +12,8 @@ pwd=CryptContext(schemes=["bcrypt"],deprecated="auto")
 def hash_password(password): return pwd.hash(password)
 def verify_password(password,password_hash): return pwd.verify(password,password_hash)
 def token_for(c):
-    return jwt.encode({"sub":str(c.id),"role":c.role,"exp":datetime.now(timezone.utc)+timedelta(hours=1)},JWT_SECRET,algorithm=JWT_ALGORITHM)
+    exp=int((datetime.now(timezone.utc)+timedelta(hours=1)).timestamp())
+    return jwt.encode({"sub":str(c.id),"role":c.role,"exp":exp},JWT_SECRET,algorithm=JWT_ALGORITHM)
 def current_user(authorization:Optional[str]=Header(None)):
     if not authorization or not authorization.lower().startswith("bearer "): raise HTTPException(401,"Authentication required")
     try:
@@ -27,8 +28,9 @@ def current_user(authorization:Optional[str]=Header(None)):
 def admin_token_for(username):
     if not JWT_SECRET:
         raise RuntimeError("XCOMPANY_JWT_SECRET is required for admin authentication")
+    exp=int((datetime.now(timezone.utc)+timedelta(hours=2)).timestamp())
     return jwt.encode(
-        {"sub":username,"role":"ADMIN","admin":True,"exp":datetime.now(timezone.utc)+timedelta(hours=2)},
+        {"sub":username,"role":"ADMIN","admin":True,"exp":exp},
         JWT_SECRET,
         algorithm=JWT_ALGORITHM,
     )
