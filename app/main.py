@@ -84,6 +84,52 @@ class PortfolioAllocation(Base):
     min_weight:Mapped[Decimal]=mapped_column(Numeric(8,4),default=0)
     max_weight:Mapped[Decimal]=mapped_column(Numeric(8,4),default=100)
 
+class Instrument(Base):
+    __tablename__="instruments"
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    symbol:Mapped[Optional[str]]=mapped_column(String(80),unique=True,index=True,nullable=True)
+    name:Mapped[str]=mapped_column(String(200))
+    instrument_type:Mapped[str]=mapped_column(String(50))
+    asset_class:Mapped[str]=mapped_column(String(80))
+    currency:Mapped[str]=mapped_column(String(3),default="AED")
+    isin:Mapped[Optional[str]]=mapped_column(String(20),unique=True,index=True,nullable=True)
+    status:Mapped[str]=mapped_column(String(30),default="ACTIVE")
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class PortfolioVersion(Base):
+    __tablename__="portfolio_versions"
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    portfolio_id:Mapped[UUID]=mapped_column(ForeignKey("portfolios.id"),index=True)
+    version_number:Mapped[int]=mapped_column()
+    status:Mapped[str]=mapped_column(String(30),default="DRAFT")
+    effective_at:Mapped[Optional[datetime]]=mapped_column(DateTime(timezone=True),nullable=True)
+    approved_by:Mapped[Optional[UUID]]=mapped_column(nullable=True)
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class IdempotencyKey(Base):
+    __tablename__="idempotency_keys"
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    customer_id:Mapped[UUID]=mapped_column(ForeignKey("customers.id"),index=True)
+    key:Mapped[str]=mapped_column(String(200))
+    endpoint:Mapped[str]=mapped_column(String(120))
+    response_status:Mapped[int]=mapped_column(default=200)
+    response_body:Mapped[str]=mapped_column(Text)
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
+class LedgerEntry(Base):
+    __tablename__="ledger_entries"
+    id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
+    account_id:Mapped[UUID]=mapped_column(ForeignKey("investment_accounts.id"),index=True)
+    subscription_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("portfolio_subscriptions.id"),index=True,nullable=True)
+    transaction_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("transactions.id"),index=True,nullable=True)
+    entry_type:Mapped[str]=mapped_column(String(40))
+    direction:Mapped[str]=mapped_column(String(10))
+    amount:Mapped[Decimal]=mapped_column(Numeric(18,2))
+    currency:Mapped[str]=mapped_column(String(3),default="AED")
+    units:Mapped[Decimal]=mapped_column(Numeric(18,6),default=0)
+    description:Mapped[str]=mapped_column(Text,default="")
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+
 class PortfolioHolding(Base):
     __tablename__="portfolio_holdings"
     id:Mapped[UUID]=mapped_column(primary_key=True,default=uuid4)
