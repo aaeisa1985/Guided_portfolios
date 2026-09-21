@@ -3,6 +3,7 @@
 const API=location.origin+'/api/v1';
 const state={route:'landing',id:null};
 const session={token:localStorage.getItem('xcompany_token'),customer:null};
+const adminSession={token:localStorage.getItem('xcompany_admin_token'),principal:null};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const num=v=>Number(v||0);
@@ -13,6 +14,12 @@ const dots=n=>'<span class="risk-dots">'+[1,2,3,4,5].map(i=>'<span class="'+(i<=
 const fmtDate=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'—';
 const row=(k,v)=>'<div class="stmt-row"><span class="k">'+esc(k)+'</span><span class="v">'+v+'</span></div>';
 
+async function adminReq(path,opt={}){
+ const r=await fetch(API+path,{...opt,headers:{'Content-Type':'application/json',...(adminSession.token?{Authorization:'Bearer '+adminSession.token}:{}),...(opt.headers||{})}});
+ let d={};try{d=await r.json()}catch(e){}
+ if(!r.ok){if(r.status===401||r.status===403){localStorage.removeItem('xcompany_admin_token');adminSession.token=null;adminSession.principal=null;state.route='landing'}throw Error(d.detail||d.message||'Request failed')}
+ return d;
+}
 async function req(path,opt={}){
  const r=await fetch(API+path,{...opt,headers:{'Content-Type':'application/json',...(session.token?{Authorization:'Bearer '+session.token}:{}),...(opt.headers||{})}});
  let d={};try{d=await r.json()}catch(e){}
@@ -26,13 +33,15 @@ function toast(message,type='info'){
 }
 async function boot(){
  if(session.token){try{session.customer=await req('/auth/me')}catch(e){}}
+ if(adminSession.token){try{adminSession.principal=await adminReq('/admin/auth/me');state.route='admin'}catch(e){}}
  await render();
 }
 function nav(route,id){state.route=route;state.id=id||null;render();scrollTo({top:0,behavior:'smooth'})}
 function top(){
  const c=session.customer;
+ const a=adminSession.principal;
  const tabs=c?['dashboard','portfolios','subscriptions','activity','profile']:['portfolios'];
- return '<div class="topbar"><div class="topbar-inner"><button class="brand" onclick="nav(\'landing\')"><span class="mark">X Company</span> Guided Portfolios</button><div class="tabs">'+tabs.map(x=>'<button class="tab '+(state.route===x?'active':'')+'" onclick="nav(\''+x+'\')">'+x[0].toUpperCase()+x.slice(1)+'</button>').join('')+'</div><div class="top-actions">'+(c?'<span class="avatar">'+esc((c.name||'?').trim()[0])+'</span><button class="btn-ghost" onclick="logout()">Sign out</button>':'<button class="btn-ghost" onclick="auth(\'login\')">Sign in</button><button class="btn btn-primary btn-sm" onclick="auth(\'register\')">Open an account</button>')+'</div></div></div>';
+ return '<div class="topbar"><div class="topbar-inner"><button class="brand" onclick="nav(\'landing\')"><span class="mark">X Company</span> Guided Portfolios</button><div class="tabs">'+tabs.map(x=>'<button class="tab '+(state.route===x?'active':'')+'" onclick="nav(\''+x+'\')">'+x[0].toUpperCase()+x.slice(1)+'</button>').join('')+'</div><div class="top-actions">'+(a?'<span class="avatar">A</span><button class="btn-ghost" onclick="adminLogout()">Admin sign out</button>':'<button class="btn-ghost" onclick="adminAuth()">Admin</button>')+(c?'<span class="avatar">'+esc((c.name||'?').trim()[0])+'</span><button class="btn-ghost" onclick="logout()">Sign out</button>':'<button class="btn-ghost" onclick="auth(\'login\')">Sign in</button><button class="btn btn-primary btn-sm" onclick="auth(\'register\')">Open an account</button>')+'</div></div></div>';
 }
 async function render(){
  let html=top()+'<main><div id="page" class="page-enter">';
@@ -45,6 +54,7 @@ async function render(){
   else if(state.route==='subscription')html+=await subscriptionDetail(state.id);
   else if(state.route==='activity')html+=activity();
   else if(state.route==='profile')html+=profile();
+  else if(state.route==='admin')html+=await adminPage();
   else html+=landing();
  }catch(e){html+='<div class="card error-card"><div class="section-title">Unable to load</div><h3>'+esc(e.message)+'</h3><button class="btn btn-secondary" onclick="render()">Retry</button></div>'}
  html+='</div></main><footer><div class="wrap">X Company Guided Portfolios · institutional-grade MVP interface</div></footer>';
@@ -146,9 +156,45 @@ function auth(mode){
    err.textContent=x.message;
   }
  } 
+} 
+async function adminPage(){
+ const [o,users,ps]=await Promise.all([adminReq('/admin/overview'),adminReq('/admin/users'),adminReq('/admin/portfolios')]);
+ return '<div class="section-title">Admin console</div><div class="admin-header"><div><h2>Operations control room</h2><p class="lead">Manage the portfolio shelf and review customer records.</p></div><span class="status-badge">ADMIN</span></div>'+
+ '<div class="metric-grid"><div class="card metric"><div class="section-title">Users</div><h2>'+num(o.users)+'</h2></div><div class="card metric"><div class="section-title">Active portfolios</div><h2>'+num(o.activePortfolios)+'</h2></div><div class="card metric"><div class="section-title">Subscriptions</div><h2>'+num(o.subscriptions)+'</h2></div></div>'+
+ '<div class="admin-grid"><div class="card"><div class="section-title">Add portfolio</div><form id="portfolio-form" onsubmit="adminCreatePortfolio(event)">'+
+ '<div class="grid-2"><div class="field"><label>Name</label><input id="p-name" required></div><div class="field"><label>Slug</label><input id="p-slug" pattern="[a-z0-9-]+" required></div></div>'+
+ '<div class="grid-2"><div class="field"><label>Category</label><input id="p-category" required></div><div class="field"><label>Risk level (1–5)</label><input id="p-risk" type="number" min="1" max="5" value="3" required></div></div>'+
+ '<div class="field"><label>Objective</label><textarea id="p-objective" rows="3" required></textarea></div>'+
+ '<div class="grid-3"><div class="field"><label>Minimum (AED)</label><input id="p-min" type="number" min="0" value="1000" required></div><div class="field"><label>Management fee %</label><input id="p-fee" type="number" min="0" step="0.01" value="0.75" required></div><div class="field"><label>Performance fee %</label><input id="p-perf" type="number" min="0" step="0.01" value="0" required></div></div>'+
+ '<div class="grid-3"><div class="field"><label>Currency</label><input id="p-currency" value="AED" maxlength="3" required></div><div class="field"><label>Liquidity</label><input id="p-liquidity" value="Daily" required></div><div class="field"><label>Allocation %</label><input id="p-allocation" type="number" min="0" max="100" value="100" required></div></div>'+
+ '<div class="grid-2"><div class="field"><label>Benchmark</label><input id="p-benchmark"></div><div class="field"><label>Status</label><select id="p-status"><option>ACTIVE</option><option>DRAFT</option><option>ARCHIVED</option></select></div></div>'+
+ '<button class="btn btn-primary" type="submit">Create portfolio</button> <span id="portfolio-form-status" class="hint"></span></form></div>'+
+ '<div class="card"><div class="section-title">Portfolio shelf</div><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Portfolio</th><th>Risk</th><th>Minimum</th><th>Fee</th><th>Status</th><th>Action</th></tr></thead><tbody>'+
+ ps.map(p=>'<tr><td><b>'+esc(p.name)+'</b><div class="hint">'+esc(p.slug)+'</div></td><td>'+esc(p.risk_level)+'</td><td>'+money(p.minimum_investment,p.base_currency)+'</td><td>'+feePct(p.management_fee)+'</td><td>'+chip(p.status)+'</td><td><button class="btn-ghost" onclick="adminTogglePortfolio(\''+p.id+'\',\''+(p.status==='ACTIVE'?'ARCHIVED':'ACTIVE')+'\')">'+(p.status==='ACTIVE'?'Archive':'Activate')+'</button></td></tr>').join('')+
+ '</tbody></table></div></div></div>'+
+ '<div class="card"><div class="section-title">Customer management</div><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Customer</th><th>KYC</th><th>AML</th><th>Role</th><th>Update</th></tr></thead><tbody>'+
+ users.map(u=>'<tr><td><b>'+esc(u.fullName)+'</b><div class="hint">'+esc(u.email)+' · '+esc(u.customerId)+'</div></td><td><select id="kyc-'+u.id+'"><option'+(u.kycStatus==='PENDING'?' selected':'')+'>PENDING</option><option'+(u.kycStatus==='APPROVED'?' selected':'')+'>APPROVED</option><option'+(u.kycStatus==='REJECTED'?' selected':'')+'>REJECTED</option></select></td><td><select id="aml-'+u.id+'"><option'+(u.amlStatus==='PENDING'?' selected':'')+'>PENDING</option><option'+(u.amlStatus==='APPROVED'?' selected':'')+'>APPROVED</option><option'+(u.amlStatus==='REJECTED'?' selected':'')+'>REJECTED</option></select></td><td><select id="role-'+u.id+'"><option'+(u.role==='INVESTOR'?' selected':'')+'>INVESTOR</option><option'+(u.role==='MANAGER'?' selected':'')+'>MANAGER</option><option'+(u.role==='ADMIN'?' selected':'')+'>ADMIN</option></select></td><td><button class="btn-ghost" onclick="adminUpdateUser(\''+u.id+'\')">Save</button></td></tr>').join('')+
+ '</tbody></table></div></div>'+
+ '<button class="btn-ghost" onclick="adminLogout()">Sign out admin</button>';
 }
+function adminAuth(){
+ document.body.insertAdjacentHTML('beforeend','<div class="modal-backdrop" id="modal"><div class="modal"><button class="modal-close" onclick="closeModal()">×</button><div class="section-title">Restricted access</div><h2>Admin sign in</h2><form id="adminform"><div class="field"><label>Username</label><input id="admin-user" autocomplete="username" required></div><div class="field"><label>Password</label><input id="admin-pass" type="password" autocomplete="current-password" required></div><button class="btn btn-primary btn-block">Sign in</button><p class="hint" id="adminerr"></p></form></div></div>');
+ $('#adminform').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');const err=$('#adminerr');b.disabled=true;b.textContent='Signing in…';try{const r=await fetch(API+'/admin/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('#admin-user').value,password:$('#admin-pass').value})});let d={};try{d=await r.json()}catch(x){}if(!r.ok)throw Error(d.detail||'Admin sign in failed');adminSession.token=d.access_token;localStorage.setItem('xcompany_admin_token',adminSession.token);adminSession.principal=await adminReq('/admin/auth/me');closeModal();state.route='admin';await render();toast('Admin signed in','success')}catch(x){err.textContent=x.message;b.disabled=false;b.textContent='Sign in'}};
+}
+function adminLogout(){localStorage.removeItem('xcompany_admin_token');adminSession.token=null;adminSession.principal=null;state.route='landing';toast('Admin signed out','info');nav('landing')}
+async function adminCreatePortfolio(e){
+ e.preventDefault();const b=e.currentTarget.querySelector('button[type="submit"]'),st=$('#portfolio-form-status');b.disabled=true;b.textContent='Creating…';st.textContent='';
+ try{await adminReq('/admin/portfolios',{method:'POST',body:JSON.stringify({name:$('#p-name').value,slug:$('#p-slug').value,category:$('#p-category').value,objective:$('#p-objective').value,risk_level:num($('#p-risk').value),minimum_investment:num($('#p-min').value),management_fee:num($('#p-fee').value),performance_fee:num($('#p-perf').value),benchmark:$('#p-benchmark').value||null,base_currency:$('#p-currency').value.toUpperCase(),liquidity_terms:$('#p-liquidity').value,status:$('#p-status').value,primary_allocation:num($('#p-allocation').value)})});st.textContent='Portfolio created.';await render();toast('Portfolio created successfully','success')}catch(x){st.textContent=x.message;b.disabled=false;b.textContent='Create portfolio'}
+}
+async function adminTogglePortfolio(id,status){
+ try{await adminReq('/admin/portfolios/'+id,{method:'PATCH',body:JSON.stringify({status})});await render();toast(status==='ACTIVE'?'Portfolio activated':'Portfolio archived','success')}catch(e){toast(e.message,'error')}
+}
+async function adminUpdateUser(id){
+ try{await adminReq('/admin/users/'+id,{method:'PATCH',body:JSON.stringify({kyc_status:$('#kyc-'+id).value,aml_status:$('#aml-'+id).value,role:$('#role-'+id).value})});toast('Customer updated','success');await render()}catch(e){toast(e.message,'error')}
+}
+
 function closeModal(){$('#modal')?.remove()}
 function logout(){localStorage.removeItem('xcompany_token');session.token=null;session.customer=null;toast('Signed out','info');nav('landing')}
-window.nav=nav;window.auth=auth;window.closeModal=closeModal;window.logout=logout;window.suit=suit;window.simulate=simulate;window.subscribe=subscribe;window.confirmSubscribe=confirmSubscribe;window.render=render;
+window.nav=nav;window.auth=auth;window.adminAuth=adminAuth;window.adminLogout=adminLogout;window.adminCreatePortfolio=adminCreatePortfolio;window.adminTogglePortfolio=adminTogglePortfolio;window.adminUpdateUser=adminUpdateUser;window.closeModal=closeModal;window.logout=logout;window.suit=suit;window.simulate=simulate;window.subscribe=subscribe;window.confirmSubscribe=confirmSubscribe;window.render=render;
 boot();
 })();
