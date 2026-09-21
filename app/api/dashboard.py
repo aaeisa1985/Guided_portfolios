@@ -1,3 +1,4 @@
+from decimal import Decimal
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,7 +7,6 @@ from app.core.security import current_user
 from app.models import PortfolioSubscription,PortfolioPosition,InvestmentAccount
 from fastapi import APIRouter
 router=APIRouter()
-
 @router.get("/api/v1/dashboard")
 def dashboard(c=Depends(current_user)):
     with Session(engine) as s:
