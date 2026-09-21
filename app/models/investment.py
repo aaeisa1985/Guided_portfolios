@@ -45,6 +45,8 @@ class LedgerEntry(Base):
     account_id:Mapped[UUID]=mapped_column(ForeignKey("investment_accounts.id"),index=True)
     subscription_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("portfolio_subscriptions.id"),index=True,nullable=True)
     transaction_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("transactions.id"),index=True,nullable=True)
+    journal_id:Mapped[Optional[UUID]]=mapped_column(ForeignKey("ledger_journals.id"),index=True,nullable=True)
+    ledger_account:Mapped[Optional[str]]=mapped_column(String(80),nullable=True)
     entry_type:Mapped[str]=mapped_column(String(40))
     direction:Mapped[str]=mapped_column(String(10))
     amount:Mapped[Decimal]=mapped_column(Numeric(18,2))
