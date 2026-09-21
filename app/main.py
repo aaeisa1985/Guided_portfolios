@@ -175,7 +175,7 @@ class AuditLog(Base):
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
 
 engine=create_engine(DATABASE_URL,connect_args={"check_same_thread":False})
-Base.metadata.create_all(engine)
+
 
 class RegisterIn(BaseModel):
     full_name:str; email:EmailStr; password:str=Field(min_length=8); mobile:Optional[str]=None
