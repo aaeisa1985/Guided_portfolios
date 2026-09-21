@@ -93,7 +93,7 @@ async function confirmSubscribe(id){
  try{
   const text='I confirm that I have reviewed the portfolio information, understand the stated risks and fees, and consent to the subscription process.';
   await req('/consents',{method:'POST',body:JSON.stringify({portfolio_id:id,consent_type:'PORTFOLIO_SUBSCRIPTION',consent_text:text,accepted:true})});
-  const r=await req('/subscriptions',{method:'POST',body:JSON.stringify({portfolio_id:id,amount:num($('#subamt').value)})});
+  const r=await req('/subscriptions',{method:'POST',headers:{'X-Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({portfolio_id:id,amount:num($('#subamt').value)})});
   closeModal();toast('Subscription created · '+r.status,'success');nav('subscriptions');
  }catch(e){toast(e.message,'error')}
 }
