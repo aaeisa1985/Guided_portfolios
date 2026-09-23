@@ -33,3 +33,7 @@ CORS_ORIGINS=[x.strip() for x in os.getenv("CORS_ORIGINS","http://localhost:8000
 
 ADMIN_USERNAME=os.getenv("ADMIN_USERNAME","").strip()
 ADMIN_PASSWORD=os.getenv("ADMIN_PASSWORD","")
+
+SUPABASE_URL=os.getenv("SUPABASE_URL","").strip()
+SUPABASE_SERVICE_ROLE_KEY=os.getenv("SUPABASE_SERVICE_ROLE_KEY","").strip()
+SUPABASE_STORAGE_BUCKET=os.getenv("SUPABASE_STORAGE_BUCKET","portfolio-documents").strip() or "portfolio-documents"
