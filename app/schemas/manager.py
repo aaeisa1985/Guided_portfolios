@@ -28,6 +28,13 @@ class ManagerPortfolioCreateIn(BaseModel):
     vehicle_type: str = Field(default="MODEL_PORTFOLIO", min_length=1, max_length=40)
     category: str = Field(min_length=2, max_length=60)
     objective: str = Field(min_length=2)
+    strategy: str = Field(default="")
+    investment_style: str = Field(default="ACTIVE", min_length=1, max_length=50)
+    shariah_status: str = Field(default="NOT_APPLICABLE", min_length=1, max_length=30)
+    distribution_policy: str = Field(default="ACCUMULATING", min_length=1, max_length=80)
+    review_frequency: str = Field(default="QUARTERLY", min_length=1, max_length=50)
+    target_horizon_years: Optional[int] = Field(default=None, ge=1, le=50)
+    inception_date: Optional[str] = None
     risk_level: int = Field(ge=1, le=5)
     minimum_investment: Decimal = Field(ge=0)
     management_fee: Decimal = Field(ge=0)
@@ -44,6 +51,13 @@ class ManagerPortfolioUpdateIn(BaseModel):
     vehicle_type: Optional[str] = Field(default=None, min_length=1, max_length=40)
     category: Optional[str] = Field(default=None, min_length=2, max_length=60)
     objective: Optional[str] = Field(default=None)
+    strategy: Optional[str] = None
+    investment_style: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    shariah_status: Optional[str] = Field(default=None, min_length=1, max_length=30)
+    distribution_policy: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    review_frequency: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    target_horizon_years: Optional[int] = Field(default=None, ge=1, le=50)
+    inception_date: Optional[str] = None
     risk_level: Optional[int] = Field(default=None, ge=1, le=5)
     minimum_investment: Optional[Decimal] = Field(default=None, ge=0)
     management_fee: Optional[Decimal] = Field(default=None, ge=0)
@@ -74,3 +88,6 @@ class ManagerPerformanceIn(BaseModel):
     daily_return: Decimal = Field(default=0)
     monthly_return: Decimal = Field(default=0)
     ytd_return: Decimal = Field(default=0)
+
+class ManagerVersionIn(BaseModel):
+    notes: str = Field(default="", max_length=2000)
