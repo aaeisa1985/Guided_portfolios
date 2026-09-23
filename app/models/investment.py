@@ -26,6 +26,8 @@ class PortfolioVersion(Base):
     status:Mapped[str]=mapped_column(String(30),default="DRAFT")
     effective_at:Mapped[Optional[datetime]]=mapped_column(DateTime(timezone=True),nullable=True)
     approved_by:Mapped[Optional[UUID]]=mapped_column(nullable=True)
+    created_by:Mapped[Optional[UUID]]=mapped_column(ForeignKey("customers.id"),nullable=True,index=True)
+    notes:Mapped[str]=mapped_column(Text,default="")
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
 
 class IdempotencyKey(Base):
