@@ -202,10 +202,13 @@ def manager_update_portfolio(request: Request, portfolio_id: UUID, x: ManagerPor
         if "inception_date" in changes and changes["inception_date"]:
             changes["inception_date"] = datetime.fromisoformat(changes["inception_date"].replace("Z","+00:00"))
         requested_status = changes.get("status")
+        composition = changes.pop("composition", None)
         if requested_status == "ACTIVE":
             raise HTTPException(400, "Use the controlled publish workflow after version approval")
         for k, v in changes.items():
             setattr(p, k, v)
+        if composition is not None:
+            _replace_composition(s, p.id, composition)
         audit(s, c, "MANAGER_PORTFOLIO_UPDATED", "Portfolio", p.id, request=request)
         s.commit()
         return {"id": p.id, "status": p.status}
