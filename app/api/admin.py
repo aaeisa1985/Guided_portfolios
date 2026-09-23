@@ -128,7 +128,7 @@ def admin_update_portfolio(request:Request,portfolio_id:UUID,x:PortfolioUpdateIn
 
 @router.post("/api/v1/admin/seed")
 def seed(request: Request,c=Depends(current_user)):
-    if c.role not in (Role.admin.value,Role.manager.value): raise HTTPException(403,"Admin or manager required")
+    if c.role != Role.manager.value: raise HTTPException(403,"Manager role required")
     with Session(engine) as s:
         if s.scalar(select(Portfolio)): return {"status":"already_seeded"}
         data=[
@@ -146,12 +146,12 @@ def seed(request: Request,c=Depends(current_user)):
 
 @router.get("/api/v1/admin/audit")
 def audit_logs(c=Depends(current_user),limit:int=Query(100,le=500)):
-    if c.role not in (Role.admin.value,Role.manager.value): raise HTTPException(403,"Admin or manager required")
+    if c.role != Role.manager.value: raise HTTPException(403,"Manager role required")
     with Session(engine) as s:return list(s.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)).all())
 
 def require_staff(c):
-    if c.role not in (Role.admin.value,Role.manager.value):
-        raise HTTPException(403,"Manager or admin role required")
+    if c.role != Role.manager.value:
+        raise HTTPException(403,"Manager role required")
 
 @router.post("/api/v1/admin/instruments")
 def create_instrument(request: Request,x:InstrumentIn,c=Depends(current_user)):
