@@ -9,3 +9,4 @@ from .investment import InstrumentIn,LedgerEntryIn,OrderIn,ExecutionIn
 from .admin import AdminLoginIn,PortfolioCreateIn,PortfolioUpdateIn,AdminUserUpdateIn,AdminPortfolioResponse
 
 from .manager import ManagerPortfolioCreateIn,ManagerPortfolioUpdateIn,ManagerCompositionIn,ManagerInstrumentCreateIn,ManagerDocumentCreateIn,ManagerPerformanceIn
+,ManagerVersionIn
