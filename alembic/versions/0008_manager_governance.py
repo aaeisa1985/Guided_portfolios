@@ -24,8 +24,10 @@ def upgrade():
     op.create_index("idx_portfolios_status_risk","portfolios",["status","risk_level"])
     op.create_index("idx_portfolio_versions_portfolio_status","portfolio_versions",["portfolio_id","status"])
     op.create_index("idx_portfolio_documents_portfolio_status","portfolio_documents",["portfolio_id","status"])
+    op.create_index("idx_portfolio_versions_created_by","portfolio_versions",["created_by"])
 
 def downgrade():
+    op.drop_index("idx_portfolio_versions_created_by","portfolio_versions")
     op.drop_index("idx_portfolio_documents_portfolio_status","portfolio_documents")
     op.drop_index("idx_portfolio_versions_portfolio_status","portfolio_versions")
     op.drop_index("idx_portfolios_status_risk","portfolios")
