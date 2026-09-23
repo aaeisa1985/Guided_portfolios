@@ -17,7 +17,7 @@ from app.services.audit import audit
 from app.services.corporate_actions import process_corporate_action, approve_corporate_action
 from app.schemas import (
     ManagerPortfolioCreateIn, ManagerPortfolioUpdateIn, ManagerCompositionIn,
-    ManagerInstrumentCreateIn, ManagerDocumentCreateIn, ManagerPerformanceIn
+    ManagerInstrumentCreateIn, ManagerDocumentCreateIn, ManagerPerformanceIn, ManagerVersionIn
 )
 
 router = APIRouter(tags=["Manager"])
@@ -33,13 +33,28 @@ def _portfolio_or_404(s, portfolio_id):
         raise HTTPException(404, "Portfolio not found")
     return p
 
+def _validate_weights(composition: ManagerCompositionIn):
+    groups = {"ASSET": [], "SECTOR": [], "GEO": []}
+    for item in composition.allocations:
+        groups[item.dimension].append(item.target_weight)
+        if item.max_weight < item.min_weight:
+            raise HTTPException(400, f"Invalid allocation range for {item.label}")
+    holdings_total = sum((x.target_weight for x in composition.holdings), Decimal("0"))
+    for dim, values in groups.items():
+        if values:
+            total = sum(values, Decimal("0"))
+            if abs(total - Decimal("100")) > Decimal("0.01"):
+                raise HTTPException(400, f"{dim} allocation must total 100%; current total={total}")
+    if composition.holdings:
+        if abs(holdings_total - Decimal("100")) > Decimal("0.01"):
+            raise HTTPException(400, f"HOLDINGS allocation must total 100%; current total={holdings_total}")
+
 def _replace_composition(s, portfolio_id, composition: ManagerCompositionIn):
+    _validate_weights(composition)
     s.query(PortfolioAllocation).filter(PortfolioAllocation.portfolio_id == portfolio_id).delete(synchronize_session=False)
     s.query(PortfolioHolding).filter(PortfolioHolding.portfolio_id == portfolio_id).delete(synchronize_session=False)
 
     for item in composition.allocations:
-        if item.max_weight < item.min_weight:
-            raise HTTPException(400, f"Invalid allocation range for {item.label}")
         s.add(PortfolioAllocation(
             portfolio_id=portfolio_id,
             asset_class=f"{item.dimension}:{item.label}",
@@ -125,10 +140,14 @@ def manager_create_portfolio(request: Request, x: ManagerPortfolioCreateIn, c=De
             raise HTTPException(409, "Portfolio slug already exists")
         p = Portfolio(
             name=x.name, slug=x.slug, vehicle_type=x.vehicle_type, category=x.category,
-            objective=x.objective, risk_level=x.risk_level, minimum_investment=x.minimum_investment,
+            objective=x.objective, strategy=x.strategy, investment_style=x.investment_style,
+            shariah_status=x.shariah_status, distribution_policy=x.distribution_policy,
+            review_frequency=x.review_frequency, target_horizon_years=x.target_horizon_years,
+            inception_date=datetime.fromisoformat(x.inception_date.replace("Z","+00:00")) if x.inception_date else None,
+            risk_level=x.risk_level, minimum_investment=x.minimum_investment,
             management_fee=x.management_fee, performance_fee=x.performance_fee,
             cost_basis_method=x.cost_basis_method, benchmark=x.benchmark,
-            base_currency=x.base_currency.upper(), liquidity_terms=x.liquidity_terms, status=x.status
+            base_currency=x.base_currency.upper(), liquidity_terms=x.liquidity_terms, status="DRAFT"
         )
         s.add(p); s.flush()
         _replace_composition(s, p.id, x.composition)
@@ -150,7 +169,10 @@ def manager_portfolio_detail(portfolio_id: UUID, c=Depends(current_user)):
                 "category": p.category, "objective": p.objective, "riskLevel": p.risk_level,
                 "minimumInvestment": p.minimum_investment, "managementFee": p.management_fee,
                 "performanceFee": p.performance_fee, "costBasisMethod": p.cost_basis_method,
-                "benchmark": p.benchmark, "baseCurrency": p.base_currency,
+                "strategy": p.strategy, "investmentStyle": p.investment_style,
+                "shariahStatus": p.shariah_status, "distributionPolicy": p.distribution_policy,
+                "reviewFrequency": p.review_frequency, "targetHorizonYears": p.target_horizon_years,
+                "inceptionDate": p.inception_date, "benchmark": p.benchmark, "baseCurrency": p.base_currency,
                 "liquidityTerms": p.liquidity_terms, "status": p.status
             },
             "composition": _composition(s, p.id),
@@ -172,6 +194,11 @@ def manager_update_portfolio(request: Request, portfolio_id: UUID, x: ManagerPor
         changes = x.model_dump(exclude_unset=True)
         if "base_currency" in changes and changes["base_currency"]:
             changes["base_currency"] = changes["base_currency"].upper()
+        if "inception_date" in changes and changes["inception_date"]:
+            changes["inception_date"] = datetime.fromisoformat(changes["inception_date"].replace("Z","+00:00"))
+        requested_status = changes.get("status")
+        if requested_status == "ACTIVE":
+            raise HTTPException(400, "Use the controlled publish workflow after version approval")
         for k, v in changes.items():
             setattr(p, k, v)
         audit(s, c, "MANAGER_PORTFOLIO_UPDATED", "Portfolio", p.id, request=request)
@@ -270,7 +297,8 @@ def manager_add_document(request: Request, portfolio_id: UUID, x: ManagerDocumen
         d = PortfolioDocument(
             portfolio_id=portfolio_id, document_type=x.document_type.upper(),
             file_url=x.file_url, version=x.version,
-            published_at=datetime.now(timezone.utc) if x.published else datetime.now(timezone.utc)
+            status="PUBLISHED" if x.published else "DRAFT",
+            published_at=datetime.now(timezone.utc)
         )
         s.add(d); s.flush()
         audit(s, c, "MANAGER_DOCUMENT_PUBLISHED", "PortfolioDocument", d.id, request=request)
@@ -299,11 +327,11 @@ def manager_versions(portfolio_id: Optional[UUID] = Query(None), c=Depends(curre
         return [{
             "id": v.id, "portfolioId": v.portfolio_id, "versionNumber": v.version_number,
             "status": v.status, "effectiveAt": v.effective_at, "createdAt": v.created_at,
-            "approvedBy": v.approved_by
+            "approvedBy": v.approved_by, "createdBy": v.created_by, "notes": v.notes
         } for v in rows]
 
 @router.post("/api/v1/manager/portfolios/{portfolio_id}/versions")
-def manager_create_version(request: Request, portfolio_id: UUID, c=Depends(current_user)):
+def manager_create_version(request: Request, portfolio_id: UUID, payload: ManagerVersionIn, c=Depends(current_user)):
     require_manager(c)
     with Session(engine) as s:
         _portfolio_or_404(s, portfolio_id)
@@ -320,7 +348,7 @@ def manager_approve_version(request: Request, portfolio_id: UUID, version_id: UU
     with Session(engine) as s:
         v = s.scalar(select(PortfolioVersion).where(PortfolioVersion.id == version_id, PortfolioVersion.portfolio_id == portfolio_id))
         if not v: raise HTTPException(404, "Portfolio version not found")
-        if v.approved_by == c.id: raise HTTPException(400, "Maker/checker control: creator cannot approve the same version")
+        if v.created_by == c.id: raise HTTPException(400, "Maker/checker control: creator cannot approve the same version")
         v.status = "ACTIVE"; v.effective_at = datetime.now(timezone.utc); v.approved_by = c.id
         audit(s, c, "MANAGER_PORTFOLIO_VERSION_APPROVED", "PortfolioVersion", v.id, request=request)
         s.commit()
@@ -406,3 +434,57 @@ def manager_audit(limit: int = Query(200, le=500), c=Depends(current_user)):
     require_manager(c)
     with Session(engine) as s:
         return list(s.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)).all())
+
+
+@router.get("/api/v1/manager/portfolios/{portfolio_id}/readiness")
+def manager_portfolio_readiness(portfolio_id: UUID, c=Depends(current_user)):
+    require_manager(c)
+    with Session(engine) as s:
+        p = _portfolio_or_404(s, portfolio_id)
+        comp = _composition(s, p.id)
+        active_version = s.scalar(select(PortfolioVersion).where(
+            PortfolioVersion.portfolio_id == p.id, PortfolioVersion.status == "ACTIVE"
+        ).order_by(PortfolioVersion.version_number.desc()))
+        fact_sheet = s.scalar(select(PortfolioDocument).where(
+            PortfolioDocument.portfolio_id == p.id,
+            PortfolioDocument.document_type == "FACT_SHEET",
+            PortfolioDocument.status == "PUBLISHED"
+        ).order_by(PortfolioDocument.published_at.desc()))
+        checks = {
+            "strategy": bool((p.strategy or "").strip()),
+            "assetAllocation": not comp["assets"] or abs(sum((Decimal(str(x["targetWeight"])) for x in comp["assets"]), Decimal("0")) - Decimal("100")) <= Decimal("0.01"),
+            "holdings": bool(comp["holdings"]) and abs(sum((Decimal(str(x["targetWeight"])) for x in comp["holdings"]), Decimal("0")) - Decimal("100")) <= Decimal("0.01"),
+            "activeVersion": bool(active_version),
+            "factSheet": bool(fact_sheet),
+        }
+        return {"portfolioId": p.id, "status": p.status, "checks": checks, "ready": all(checks.values()),
+                "activeVersionId": active_version.id if active_version else None,
+                "factSheetId": fact_sheet.id if fact_sheet else None}
+
+@router.post("/api/v1/manager/portfolios/{portfolio_id}/publish")
+def manager_publish_portfolio(request: Request, portfolio_id: UUID, c=Depends(current_user)):
+    require_manager(c)
+    with Session(engine) as s:
+        p = _portfolio_or_404(s, portfolio_id)
+        comp = _composition(s, p.id)
+        active_version = s.scalar(select(PortfolioVersion).where(
+            PortfolioVersion.portfolio_id == p.id, PortfolioVersion.status == "ACTIVE"
+        ).order_by(PortfolioVersion.version_number.desc()))
+        fact_sheet = s.scalar(select(PortfolioDocument).where(
+            PortfolioDocument.portfolio_id == p.id,
+            PortfolioDocument.document_type == "FACT_SHEET",
+            PortfolioDocument.status == "PUBLISHED"
+        ).order_by(PortfolioDocument.published_at.desc()))
+        checks = [
+            bool((p.strategy or "").strip()),
+            bool(comp["holdings"]) and abs(sum((Decimal(str(x["targetWeight"])) for x in comp["holdings"]), Decimal("0")) - Decimal("100")) <= Decimal("0.01"),
+            not comp["assets"] or abs(sum((Decimal(str(x["targetWeight"])) for x in comp["assets"]), Decimal("0")) - Decimal("100")) <= Decimal("0.01"),
+            bool(active_version),
+            bool(fact_sheet),
+        ]
+        if not all(checks):
+            raise HTTPException(409, "Portfolio is not publication-ready. Complete strategy, 100% holdings/assets, approved version and FACT_SHEET first.")
+        p.status = "ACTIVE"
+        audit(s, c, "MANAGER_PORTFOLIO_PUBLISHED", "Portfolio", p.id, request=request)
+        s.commit()
+        return {"id": p.id, "status": p.status}
