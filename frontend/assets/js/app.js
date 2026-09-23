@@ -212,7 +212,7 @@ function managerRenderEditor(d){
  managerCompositionCard('asset','Asset allocation',c.assets)+managerCompositionCard('sector','Sector breakdown',c.sectors)+managerCompositionCard('geo','Geographic breakdown',c.geography)+
  '<div class="card"><div class="section-title">Products / Holdings</div><p class="hint">Attach products to the portfolio and set target weights.</p><div id="mp-holdings">'+managerRowsHtml('holdings',c.holdings)+'</div><button class="btn btn-ghost btn-small" onclick="managerAddRow(\'holdings\')">+ Add product</button><div id="mp-holdings-total" class="allocation-summary"></div></div>'+
  '<div class="card"><div class="section-title">NAV / Performance</div><div class="grid-4"><div class="field"><label>NAV</label><input id="mp-nav" type="number" min="0" step="0.0001" value="'+(d.performance?.length?num(d.performance[d.performance.length-1].nav):100)+'"></div><div class="field"><label>Daily return</label><input id="mp-daily" type="number" step="0.0001" value="0"></div><div class="field"><label>Monthly return</label><input id="mp-monthly" type="number" step="0.0001" value="0"></div><div class="field"><label>YTD return</label><input id="mp-ytd" type="number" step="0.0001" value="0"></div></div><button class="btn btn-ghost btn-small" onclick="managerAddNav(\''+(p.id||'')+'\')">Record NAV observation</button></div>'+
- '<div class="card"><div class="section-title">Fact sheets & documents</div><div id="mp-docs">'+((d.documents||[]).map(x=>'<div class="doc-row"><span><b>'+esc(x.documentType)+'</b> · v'+esc(x.version)+'</span><a class="btn-ghost" href="'+esc(x.fileUrl)+'" target="_blank" rel="noopener">Open</a></div>').join('')||'<div class="hint">No documents published.</div>')+'</div><div class="grid-3"><div class="field"><label>Document type</label><input id="mp-doc-type" value="FACT_SHEET"></div><div class="field"><label>Version</label><input id="mp-doc-version" value="1.0"></div><div class="field"><label>File URL</label><input id="mp-doc-url" placeholder="Supabase Storage / CDN URL"></div></div><button class="btn btn-ghost btn-small" onclick="managerAddDocument(\''+(p.id||'')+'\')">Publish document</button></div>'+
+ '<div class="card"><div class="section-title">Fact sheets & documents</div><div id="mp-docs">'+((d.documents||[]).map(x=>'<div class="doc-row"><span><b>'+esc(x.documentType)+'</b> · v'+esc(x.version)+'</span><button class="btn-ghost" onclick="managerOpenDocument(\''+x.id+'\')">Open</button></div>').join('')||'<div class="hint">No documents published.</div>')+'</div><div class="grid-3"><div class="field"><label>Document type</label><input id="mp-doc-type" value="FACT_SHEET"></div><div class="field"><label>Version</label><input id="mp-doc-version" value="1.0"></div><div class="field"><label>PDF upload</label><input id="mp-doc-file" type="file" accept="application/pdf"></div></div><div class="field"><label>Legacy / external URL (optional)</label><input id="mp-doc-url" placeholder="Use only when the document is hosted elsewhere"></div><button class="btn btn-ghost btn-small" onclick="managerAddDocument(\''+(p.id||'')+'\')">Upload & publish document</button></div>'+
  '<div class="card"><div class="section-title">Version & publication governance</div><p class="hint">A portfolio remains private until a second Manager approves a version and the publication checklist passes.</p><div id="mp-readiness" class="governance-checklist">Loading publication checklist…</div><div id="mp-versions" style="margin-top:16px;"></div><div class="btnrow"><button class="btn btn-ghost btn-small" '+(p.id?'':'disabled')+' onclick="managerCreateVersion(\''+(p.id||'')+'\')">Create draft version</button><button class="btn btn-primary btn-small" '+(p.id?'':'disabled')+' onclick="managerPublishPortfolio(\''+(p.id||'')+'\')">Publish to investors</button></div></div>'+
  '<div class="btnrow"><button class="btn btn-primary" onclick="managerSavePortfolio(\''+(p.id||'')+'\')">'+(p.id?'Save changes':'Create portfolio')+'</button><button class="btn btn-ghost" onclick="managerTab(\'portfolios\')">Cancel</button></div>';
  managerHydrateInstrumentSelectors();managerUpdateTotals();if(p.id)managerLoadReadiness(p.id);
@@ -227,7 +227,33 @@ async function managerSavePortfolio(id){
  try{if(!id){await managerReq('/manager/portfolios',{method:'POST',body:JSON.stringify(body)})}else{delete body.slug;const composition=body.composition;delete body.composition;await managerReq('/manager/portfolios/'+id,{method:'PATCH',body:JSON.stringify(body)});await managerReq('/manager/portfolios/'+id+'/composition',{method:'PUT',body:JSON.stringify(composition)})}toast('Portfolio saved successfully','success');managerTab('portfolios')}catch(e){toast(e.message,'error')}
 }
 async function managerAddNav(id){if(!id)return toast('Save the portfolio first','warning');try{await managerReq('/manager/portfolios/'+id+'/performance',{method:'POST',body:JSON.stringify({nav:num($('#mp-nav').value),daily_return:num($('#mp-daily').value),monthly_return:num($('#mp-monthly').value),ytd_return:num($('#mp-ytd').value)})});toast('NAV observation recorded','success')}catch(e){toast(e.message,'error')}}
-async function managerAddDocument(id){if(!id)return toast('Save the portfolio first','warning');try{await managerReq('/manager/portfolios/'+id+'/documents',{method:'POST',body:JSON.stringify({document_type:$('#mp-doc-type').value.trim(),version:$('#mp-doc-version').value.trim(),file_url:$('#mp-doc-url').value.trim(),published:true})});toast('Document published','success');managerEditPortfolio(id)}catch(e){toast(e.message,'error')}}
+async function managerAddDocument(id){
+ if(!id)return toast('Save the portfolio first','warning');
+ try{
+  const file=$('#mp-doc-file')?.files?.[0];
+  let fileUrl=$('#mp-doc-url')?.value.trim()||'';
+  if(file){
+   if(file.type!=='application/pdf')throw Error('Only PDF documents are supported');
+   if(file.size>10*1024*1024)throw Error('Maximum document size is 10 MB');
+   const q='/manager/portfolios/'+id+'/documents/upload-url?filename='+encodeURIComponent(file.name)+'&content_type='+encodeURIComponent(file.type);
+   const signed=await managerReq(q);
+   if(!signed.signedUrl)throw Error('Storage upload URL was not generated');
+   const up=await fetch(signed.signedUrl,{method:'PUT',body:file,headers:{'content-type':file.type,'x-upsert':'false','cache-control':'max-age=3600'}});
+   if(!up.ok)throw Error('Document upload failed');
+   fileUrl='storage://'+signed.bucket+'/'+signed.path;
+  }
+  if(!fileUrl)throw Error('Choose a PDF or provide an external URL');
+  await managerReq('/manager/portfolios/'+id+'/documents',{method:'POST',body:JSON.stringify({document_type:$('#mp-doc-type').value.trim(),version:$('#mp-doc-version').value.trim(),file_url:fileUrl,published:true})});
+  toast('Document uploaded and published','success');managerEditPortfolio(id)
+ }catch(e){toast(e.message,'error')}
+}
+async function managerOpenDocument(id){
+ try{
+  const r=await managerReq('/manager/documents/'+id+'/signed-url');
+  if(!r.signedUrl)throw Error('Document URL unavailable');
+  window.open(r.signedUrl,'_blank','noopener')
+ }catch(e){toast(e.message,'error')}
+}
 async function managerCreateVersion(id){const notes=prompt('Version notes / release rationale:','');try{await managerReq('/manager/portfolios/'+id+'/versions',{method:'POST',body:JSON.stringify({notes:notes||''})});toast('Draft version created','success');managerEditPortfolio(id)}catch(e){toast(e.message,'error')}}
 async function managerLoadReadiness(id){
  if(!id)return;
@@ -291,6 +317,6 @@ async function adminUpdateUser(id){
 
 function closeModal(){$('#modal')?.remove()}
 function logout(){localStorage.removeItem('xcompany_token');session.token=null;session.customer=null;toast('Signed out','info');nav('landing')}
-window.nav=nav;window.auth=auth;window.adminAuth=adminAuth;window.adminLogout=adminLogout;window.adminUpdateUser=adminUpdateUser;window.managerTab=managerTab;window.managerNewPortfolio=managerNewPortfolio;window.managerEditPortfolio=managerEditPortfolio;window.managerAddRow=managerAddRow;window.managerUpdateTotals=managerUpdateTotals;window.managerSavePortfolio=managerSavePortfolio;window.managerAddNav=managerAddNav;window.managerAddDocument=managerAddDocument;window.managerCreateVersion=managerCreateVersion;window.managerApproveVersion=managerApproveVersion;window.managerPublishPortfolio=managerPublishPortfolio;window.managerShowInstrumentForm=managerShowInstrumentForm;window.managerCreateInstrument=managerCreateInstrument;window.managerCreateCA=managerCreateCA;window.managerApproveCA=managerApproveCA;window.managerExecuteCA=managerExecuteCA;window.managerCAEvents=managerCAEvents;window.closeModal=closeModal;window.logout=logout;window.suit=suit;window.simulate=simulate;window.subscribe=subscribe;window.confirmSubscribe=confirmSubscribe;window.render=render;
+window.nav=nav;window.auth=auth;window.adminAuth=adminAuth;window.adminLogout=adminLogout;window.adminUpdateUser=adminUpdateUser;window.managerTab=managerTab;window.managerNewPortfolio=managerNewPortfolio;window.managerEditPortfolio=managerEditPortfolio;window.managerAddRow=managerAddRow;window.managerUpdateTotals=managerUpdateTotals;window.managerSavePortfolio=managerSavePortfolio;window.managerAddNav=managerAddNav;window.managerAddDocument=managerAddDocument;window.managerOpenDocument=managerOpenDocument;window.managerCreateVersion=managerCreateVersion;window.managerApproveVersion=managerApproveVersion;window.managerPublishPortfolio=managerPublishPortfolio;window.managerShowInstrumentForm=managerShowInstrumentForm;window.managerCreateInstrument=managerCreateInstrument;window.managerCreateCA=managerCreateCA;window.managerApproveCA=managerApproveCA;window.managerExecuteCA=managerExecuteCA;window.managerCAEvents=managerCAEvents;window.closeModal=closeModal;window.logout=logout;window.suit=suit;window.simulate=simulate;window.subscribe=subscribe;window.confirmSubscribe=confirmSubscribe;window.render=render;
 boot();
 })();
