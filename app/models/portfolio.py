@@ -22,7 +22,14 @@ class Portfolio(Base):
     benchmark:Mapped[Optional[str]]=mapped_column(String(100),nullable=True)
     base_currency:Mapped[str]=mapped_column(String(3),default="AED")
     liquidity_terms:Mapped[str]=mapped_column(String(100),default="Daily")
-    status:Mapped[str]=mapped_column(String(30),default="ACTIVE")
+    status:Mapped[str]=mapped_column(String(30),default="DRAFT")
+    strategy:Mapped[str]=mapped_column(Text,default="")
+    investment_style:Mapped[str]=mapped_column(String(50),default="ACTIVE")
+    shariah_status:Mapped[str]=mapped_column(String(30),default="NOT_APPLICABLE")
+    distribution_policy:Mapped[str]=mapped_column(String(80),default="ACCUMULATING")
+    review_frequency:Mapped[str]=mapped_column(String(50),default="QUARTERLY")
+    target_horizon_years:Mapped[Optional[int]]=mapped_column(nullable=True)
+    inception_date:Mapped[Optional[datetime]]=mapped_column(DateTime(timezone=True),nullable=True)
 
 class PortfolioAllocation(Base):
     __tablename__="portfolio_allocations"
