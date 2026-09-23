@@ -129,7 +129,11 @@ def manager_portfolios(c=Depends(current_user)):
             "category": p.category, "objective": p.objective, "riskLevel": p.risk_level,
             "minimumInvestment": p.minimum_investment, "managementFee": p.management_fee,
             "performanceFee": p.performance_fee, "benchmark": p.benchmark,
-            "baseCurrency": p.base_currency, "liquidityTerms": p.liquidity_terms, "status": p.status
+            "baseCurrency": p.base_currency, "liquidityTerms": p.liquidity_terms, "status": p.status,
+            "strategy": p.strategy, "investmentStyle": p.investment_style,
+            "shariahStatus": p.shariah_status, "distributionPolicy": p.distribution_policy,
+            "reviewFrequency": p.review_frequency, "targetHorizonYears": p.target_horizon_years,
+            "inceptionDate": p.inception_date
         } for p in rows]
 
 @router.post("/api/v1/manager/portfolios")
