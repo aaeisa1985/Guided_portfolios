@@ -336,7 +336,7 @@ def manager_create_version(request: Request, portfolio_id: UUID, payload: Manage
     with Session(engine) as s:
         _portfolio_or_404(s, portfolio_id)
         n = (s.scalar(select(PortfolioVersion.version_number).where(PortfolioVersion.portfolio_id == portfolio_id).order_by(PortfolioVersion.version_number.desc())) or 0) + 1
-        v = PortfolioVersion(portfolio_id=portfolio_id, version_number=n, status="DRAFT")
+        v = PortfolioVersion(portfolio_id=portfolio_id, version_number=n, status="DRAFT", created_by=c.id, notes=payload.notes)
         s.add(v); s.flush()
         audit(s, c, "MANAGER_PORTFOLIO_VERSION_CREATED", "PortfolioVersion", v.id, request=request)
         s.commit()
