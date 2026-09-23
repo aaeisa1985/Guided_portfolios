@@ -19,6 +19,7 @@ from app.schemas import (
     ManagerPortfolioCreateIn, ManagerPortfolioUpdateIn, ManagerCompositionIn,
     ManagerInstrumentCreateIn, ManagerDocumentCreateIn, ManagerPerformanceIn, ManagerVersionIn
 )
+from app.services.storage import create_upload, create_download
 
 router = APIRouter(tags=["Manager"])
 
@@ -308,6 +309,37 @@ def manager_add_document(request: Request, portfolio_id: UUID, x: ManagerDocumen
         audit(s, c, "MANAGER_DOCUMENT_PUBLISHED", "PortfolioDocument", d.id, request=request)
         s.commit()
         return {"id": d.id, "documentType": d.document_type, "version": d.version}
+
+
+@router.post("/api/v1/manager/portfolios/{portfolio_id}/documents/upload-url")
+def manager_document_upload_url(
+    request: Request,
+    portfolio_id: UUID,
+    filename: str = Query(..., min_length=1, max_length=200),
+    content_type: str = Query("application/pdf"),
+    c=Depends(current_user)
+):
+    require_manager(c)
+    with Session(engine) as s:
+        _portfolio_or_404(s, portfolio_id)
+    try:
+        return create_upload(filename, content_type, portfolio_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+@router.get("/api/v1/manager/documents/{document_id}/signed-url")
+def manager_document_signed_url(document_id: UUID, c=Depends(current_user)):
+    require_manager(c)
+    with Session(engine) as s:
+        d=s.get(PortfolioDocument,document_id)
+        if not d: raise HTTPException(404,"Document not found")
+        path=d.file_url
+    try:
+        return {"signedUrl":create_download(path)}
+    except RuntimeError as e:
+        raise HTTPException(503,str(e))
 
 @router.delete("/api/v1/manager/documents/{document_id}")
 def manager_delete_document(request: Request, document_id: UUID, c=Depends(current_user)):
