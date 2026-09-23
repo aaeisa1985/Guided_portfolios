@@ -68,3 +68,5 @@ class PortfolioDocument(Base):
     file_url:Mapped[str]=mapped_column(Text)
     version:Mapped[str]=mapped_column(String(30))
     published_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+    status:Mapped[str]=mapped_column(String(30),default="PUBLISHED")
+    checksum:Mapped[Optional[str]]=mapped_column(String(128),nullable=True)
