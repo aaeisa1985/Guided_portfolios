@@ -67,6 +67,7 @@ class ManagerPortfolioUpdateIn(BaseModel):
     base_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     liquidity_terms: Optional[str] = Field(default=None, min_length=1, max_length=100)
     status: Optional[str] = Field(default=None, pattern=r"^(ACTIVE|DRAFT|ARCHIVED)$")
+    composition: Optional[ManagerCompositionIn] = None
 
 class ManagerInstrumentCreateIn(BaseModel):
     symbol: Optional[str] = Field(default=None, max_length=80)
