@@ -95,13 +95,15 @@ def admin_update_user(request:Request,user_id:UUID,x:AdminUserUpdateIn,admin=Dep
         return {"id":u.id,"customerId":u.customer_id,"fullName":u.full_name,"email":u.email,"mobile":u.mobile,"investorType":u.investor_type,"kycStatus":u.kyc_status,"amlStatus":u.aml_status,"role":u.role}
 
 @router.get("/api/v1/admin/portfolios",response_model=list[AdminPortfolioResponse])
-def admin_portfolios(admin=Depends(current_admin)):
+def admin_portfolios(c=Depends(current_user)):
+    require_staff(c)
     with Session(engine) as s:
         rows=s.scalars(select(Portfolio).order_by(Portfolio.name)).all()
         return rows
 
 @router.post("/api/v1/admin/portfolios",response_model=AdminPortfolioResponse)
-def admin_create_portfolio(request:Request,x:PortfolioCreateIn,admin=Depends(current_admin)):
+def admin_create_portfolio(request:Request,x:PortfolioCreateIn,c=Depends(current_user)):
+    require_staff(c)
     with Session(engine) as s:
         if s.scalar(select(Portfolio).where(Portfolio.slug==x.slug)):
             raise HTTPException(409,"Portfolio slug already exists")
@@ -110,19 +112,20 @@ def admin_create_portfolio(request:Request,x:PortfolioCreateIn,admin=Depends(cur
         if x.primary_allocation>0:
             s.add(PortfolioAllocation(portfolio_id=p.id,asset_class="Primary Allocation",target_weight=x.primary_allocation))
         s.add(PortfolioPerformance(portfolio_id=p.id,nav=Decimal("100"),daily_return=Decimal("0"),monthly_return=Decimal("0"),ytd_return=Decimal("0")))
-        _admin_audit(s,admin,"ADMIN_PORTFOLIO_CREATED","Portfolio",p.id,request)
+        audit(s,c,"MANAGER_PORTFOLIO_CREATED_LEGACY","Portfolio",p.id,request=request)
         s.commit()
         return p
 
 @router.patch("/api/v1/admin/portfolios/{portfolio_id}",response_model=AdminPortfolioResponse)
-def admin_update_portfolio(request:Request,portfolio_id:UUID,x:PortfolioUpdateIn,admin=Depends(current_admin)):
+def admin_update_portfolio(request:Request,portfolio_id:UUID,x:PortfolioUpdateIn,c=Depends(current_user)):
+    require_staff(c)
     with Session(engine) as s:
         p=s.get(Portfolio,portfolio_id)
         if not p: raise HTTPException(404,"Portfolio not found")
         changes=x.model_dump(exclude_unset=True)
         if "base_currency" in changes and changes["base_currency"]: changes["base_currency"]=changes["base_currency"].upper()
         for k,v in changes.items(): setattr(p,k,v)
-        _admin_audit(s,admin,"ADMIN_PORTFOLIO_UPDATED","Portfolio",p.id,request)
+        audit(s,c,"MANAGER_PORTFOLIO_UPDATED_LEGACY","Portfolio",p.id,request=request)
         s.commit()
         return p
 
