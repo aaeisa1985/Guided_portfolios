@@ -1,10 +1,12 @@
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
+from typing import Literal
 from pydantic import BaseModel, Field
 
 class ManagerAllocationIn(BaseModel):
-    asset_class: str = Field(min_length=1, max_length=80)
+    dimension: Literal["ASSET","SECTOR","GEO"] = "ASSET"
+    label: str = Field(min_length=1, max_length=70)
     target_weight: Decimal = Field(ge=0, le=100)
     min_weight: Decimal = Field(default=0, ge=0, le=100)
     max_weight: Decimal = Field(default=100, ge=0, le=100)
