@@ -76,6 +76,18 @@ def _replace_composition(s, portfolio_id, composition: ManagerCompositionIn):
             target_weight=h.target_weight,
         ))
 
+def _invalidate_active_versions(s, portfolio_id, actor, request=None):
+    versions = s.scalars(
+        select(PortfolioVersion).where(
+            PortfolioVersion.portfolio_id == portfolio_id,
+            PortfolioVersion.status == "ACTIVE"
+        )
+    ).all()
+    for v in versions:
+        v.status = "ARCHIVED"
+        audit(s, actor, "MANAGER_PORTFOLIO_VERSION_INVALIDATED", "PortfolioVersion", v.id, request=request)
+    return len(versions)
+
 def _composition(s, portfolio_id):
     rows = s.scalars(select(PortfolioAllocation).where(PortfolioAllocation.portfolio_id == portfolio_id)).all()
     alloc = {"ASSET": [], "SECTOR": [], "GEO": []}
@@ -205,10 +217,13 @@ def manager_update_portfolio(request: Request, portfolio_id: UUID, x: ManagerPor
         composition = changes.pop("composition", None)
         if requested_status == "ACTIVE":
             raise HTTPException(400, "Use the controlled publish workflow after version approval")
+        invalidated = _invalidate_active_versions(s, p.id, c, request=request)
         for k, v in changes.items():
             setattr(p, k, v)
         if composition is not None:
             _replace_composition(s, p.id, composition)
+        if p.status == "ACTIVE" and requested_status is None:
+            p.status = "DRAFT"
         audit(s, c, "MANAGER_PORTFOLIO_UPDATED", "Portfolio", p.id, request=request)
         s.commit()
         return {"id": p.id, "status": p.status}
@@ -218,7 +233,10 @@ def manager_update_composition(request: Request, portfolio_id: UUID, x: ManagerC
     require_manager(c)
     with Session(engine) as s:
         p = _portfolio_or_404(s, portfolio_id)
+        _invalidate_active_versions(s, p.id, c, request=request)
         _replace_composition(s, p.id, x)
+        if p.status == "ACTIVE":
+            p.status = "DRAFT"
         audit(s, c, "MANAGER_PORTFOLIO_COMPOSITION_UPDATED", "Portfolio", p.id, request=request)
         s.commit()
         return {"id": p.id, "composition": _composition(s, p.id)}
@@ -388,6 +406,11 @@ def manager_approve_version(request: Request, portfolio_id: UUID, version_id: UU
         v = s.scalar(select(PortfolioVersion).where(PortfolioVersion.id == version_id, PortfolioVersion.portfolio_id == portfolio_id))
         if not v: raise HTTPException(404, "Portfolio version not found")
         if v.created_by == c.id: raise HTTPException(400, "Maker/checker control: creator cannot approve the same version")
+        s.query(PortfolioVersion).filter(
+            PortfolioVersion.portfolio_id == portfolio_id,
+            PortfolioVersion.status == "ACTIVE",
+            PortfolioVersion.id != v.id
+        ).update({"status": "ARCHIVED"}, synchronize_session=False)
         v.status = "ACTIVE"; v.effective_at = datetime.now(timezone.utc); v.approved_by = c.id
         audit(s, c, "MANAGER_PORTFOLIO_VERSION_APPROVED", "PortfolioVersion", v.id, request=request)
         s.commit()
